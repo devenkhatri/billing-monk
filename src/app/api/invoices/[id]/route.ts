@@ -90,6 +90,19 @@ export async function PUT(
         amount: item.quantity * item.rate
       }));
 
+      // Transform recurring schedule if present
+      let recurringSchedule: UpdateInvoiceData['recurringSchedule'] = undefined;
+      if (formData.isRecurring && formData.recurringSchedule) {
+        recurringSchedule = {
+          frequency: formData.recurringSchedule.frequency,
+          interval: formData.recurringSchedule.interval,
+          startDate: new Date(formData.recurringSchedule.startDate),
+          endDate: formData.recurringSchedule.endDate ? new Date(formData.recurringSchedule.endDate) : undefined,
+          nextInvoiceDate: new Date(formData.recurringSchedule.startDate), // Will be calculated in service
+          isActive: true
+        };
+      }
+
       updateData = {
         clientId: formData.clientId,
         templateId: formData.templateId,
@@ -99,11 +112,7 @@ export async function PUT(
         taxRate: formData.taxRate,
         notes: formData.notes,
         isRecurring: formData.isRecurring,
-        recurringSchedule: formData.recurringSchedule ? {
-          ...formData.recurringSchedule,
-          nextInvoiceDate: new Date(formData.recurringSchedule.startDate),
-          isActive: true
-        } : undefined
+        recurringSchedule
       };
     }
 

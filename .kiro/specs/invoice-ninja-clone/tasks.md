@@ -63,14 +63,14 @@
   - Add invoice status tracking for sent invoices
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 10. Develop recurring invoice functionality
+- [x] 10. Develop recurring invoice functionality
   - Create recurring invoice setup form with schedule configuration
   - Implement automatic invoice generation based on recurring schedules
   - Build recurring invoice management and editing capabilities
   - Add notification system for generated recurring invoices
   - _Requirements: 4.5_
 
-- [ ] 11. Create dashboard and analytics features
+- [-] 11. Create dashboard and analytics features
   - Build main dashboard with key business metrics display
   - Implement charts and graphs for revenue and invoice analytics
   - Create date range filtering for dashboard metrics

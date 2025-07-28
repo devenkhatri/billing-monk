@@ -228,6 +228,13 @@ export interface LineItemFormData {
   rate: number;
 }
 
+export interface RecurringScheduleFormData {
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  interval: number;
+  startDate: string;
+  endDate?: string;
+}
+
 export interface InvoiceFormData {
   clientId: string;
   templateId?: string;
@@ -237,7 +244,7 @@ export interface InvoiceFormData {
   taxRate: number;
   notes?: string;
   isRecurring: boolean;
-  recurringSchedule?: Omit<RecurringSchedule, 'nextInvoiceDate' | 'isActive'>;
+  recurringSchedule?: RecurringScheduleFormData;
 }
 
 export interface PaymentFormData {

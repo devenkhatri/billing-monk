@@ -57,8 +57,8 @@ export function InvoiceForm({
       recurringSchedule: invoice.recurringSchedule ? {
         frequency: invoice.recurringSchedule.frequency,
         interval: invoice.recurringSchedule.interval,
-        startDate: invoice.recurringSchedule.startDate,
-        endDate: invoice.recurringSchedule.endDate
+        startDate: invoice.recurringSchedule.startDate.toISOString().split('T')[0],
+        endDate: invoice.recurringSchedule.endDate?.toISOString().split('T')[0] || ''
       } : undefined
     } : {
       clientId: '',
@@ -80,6 +80,7 @@ export function InvoiceForm({
   const watchedLineItems = watch('lineItems');
   const watchedTaxRate = watch('taxRate');
   const watchedTemplateId = watch('templateId');
+  const watchedIsRecurring = watch('isRecurring');
 
   // Load templates on component mount
   useEffect(() => {
@@ -390,6 +391,99 @@ export function InvoiceForm({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Recurring Invoice Settings */}
+      <div className="space-y-4">
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="isRecurring"
+            {...register('isRecurring')}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="isRecurring" className="ml-2 block text-sm font-medium text-gray-700">
+            Make this a recurring invoice
+          </label>
+        </div>
+
+        {watchedIsRecurring && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+            <h4 className="text-sm font-medium text-blue-900">Recurring Schedule</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                label="Frequency"
+                error={errors.recurringSchedule?.frequency?.message}
+                required
+              >
+                <Select
+                  value={watch('recurringSchedule.frequency') || ''}
+                  onChange={(value) => setValue('recurringSchedule.frequency', value as 'weekly' | 'monthly' | 'quarterly' | 'yearly')}
+                  options={[
+                    { value: 'weekly', label: 'Weekly' },
+                    { value: 'monthly', label: 'Monthly' },
+                    { value: 'quarterly', label: 'Quarterly' },
+                    { value: 'yearly', label: 'Yearly' }
+                  ]}
+                  placeholder="Select frequency"
+                  error={!!errors.recurringSchedule?.frequency}
+                />
+              </FormField>
+
+              <FormField
+                label="Interval"
+                error={errors.recurringSchedule?.interval?.message}
+                required
+              >
+                <Input
+                  type="number"
+                  min="1"
+                  max="12"
+                  {...register('recurringSchedule.interval', { valueAsNumber: true })}
+                  placeholder="1"
+                  error={errors.recurringSchedule?.interval?.message}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Every {watch('recurringSchedule.interval') || 1} {watch('recurringSchedule.frequency') || 'period'}(s)
+                </p>
+              </FormField>
+
+              <FormField
+                label="Start Date"
+                error={errors.recurringSchedule?.startDate?.message}
+                required
+              >
+                <Input
+                  type="date"
+                  {...register('recurringSchedule.startDate')}
+                  error={errors.recurringSchedule?.startDate?.message}
+                />
+              </FormField>
+
+              <FormField
+                label="End Date (Optional)"
+                error={errors.recurringSchedule?.endDate?.message}
+              >
+                <Input
+                  type="date"
+                  {...register('recurringSchedule.endDate')}
+                  error={errors.recurringSchedule?.endDate?.message}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Leave empty for indefinite recurring
+                </p>
+              </FormField>
+            </div>
+
+            <div className="bg-blue-100 p-3 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Recurring invoices will be automatically generated based on this schedule. 
+                You can manage and modify recurring invoices from the invoices list.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notes */}

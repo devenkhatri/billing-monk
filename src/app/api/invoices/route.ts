@@ -59,6 +59,19 @@ export async function POST(request: NextRequest) {
       amount: item.quantity * item.rate
     }));
 
+    // Transform recurring schedule if present
+    let recurringSchedule: CreateInvoiceData['recurringSchedule'] = undefined;
+    if (formData.isRecurring && formData.recurringSchedule) {
+      recurringSchedule = {
+        frequency: formData.recurringSchedule.frequency,
+        interval: formData.recurringSchedule.interval,
+        startDate: new Date(formData.recurringSchedule.startDate),
+        endDate: formData.recurringSchedule.endDate ? new Date(formData.recurringSchedule.endDate) : undefined,
+        nextInvoiceDate: new Date(formData.recurringSchedule.startDate), // Will be calculated in service
+        isActive: true
+      };
+    }
+
     const createData: CreateInvoiceData = {
       clientId: formData.clientId,
       templateId: formData.templateId,
@@ -72,11 +85,7 @@ export async function POST(request: NextRequest) {
       total: 0, // Will be calculated in service
       notes: formData.notes,
       isRecurring: formData.isRecurring,
-      recurringSchedule: formData.recurringSchedule ? {
-        ...formData.recurringSchedule,
-        nextInvoiceDate: new Date(formData.recurringSchedule.startDate),
-        isActive: true
-      } : undefined
+      recurringSchedule
     };
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();

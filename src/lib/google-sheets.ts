@@ -215,7 +215,7 @@ export class GoogleSheetsService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Invoices!A2:S'
+        range: 'Invoices!A2:T'
       });
 
       const rows = response.data.values || [];
@@ -233,10 +233,27 @@ export class GoogleSheetsService {
     const taxAmount = subtotal * (invoiceData.taxRate / 100);
     const total = subtotal + taxAmount;
 
+    // Handle recurring schedule
+    let recurringSchedule: Invoice['recurringSchedule'] = undefined;
+    if (invoiceData.isRecurring && invoiceData.recurringSchedule) {
+      const nextInvoiceDate = this.calculateNextInvoiceDate(
+        invoiceData.recurringSchedule.startDate,
+        invoiceData.recurringSchedule.frequency,
+        invoiceData.recurringSchedule.interval
+      );
+      
+      recurringSchedule = {
+        ...invoiceData.recurringSchedule,
+        nextInvoiceDate,
+        isActive: true
+      };
+    }
+
     const invoice: Invoice = {
       id: this.generateId(),
       invoiceNumber,
       ...invoiceData,
+      recurringSchedule,
       subtotal,
       taxAmount,
       total,
@@ -249,7 +266,7 @@ export class GoogleSheetsService {
     // Save invoice header
     await this.sheets.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
-      range: 'Invoices!A:S',
+      range: 'Invoices!A:T',
       valueInputOption: 'RAW',
       requestBody: {
         values: [this.invoiceToRow(invoice)]
@@ -287,7 +304,7 @@ export class GoogleSheetsService {
       // Get all invoices to find the row index
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Invoices!A2:S'
+        range: 'Invoices!A2:T'
       });
 
       const rows = response.data.values || [];
@@ -335,7 +352,7 @@ export class GoogleSheetsService {
       const sheetRowIndex = rowIndex + 2;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Invoices!A${sheetRowIndex}:S${sheetRowIndex}`,
+        range: `Invoices!A${sheetRowIndex}:T${sheetRowIndex}`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [this.invoiceToRow(updatedInvoiceData)]
@@ -376,7 +393,7 @@ export class GoogleSheetsService {
       // Get all invoices to find the row index
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Invoices!A2:S'
+        range: 'Invoices!A2:T'
       });
 
       const rows = response.data.values || [];
@@ -500,6 +517,24 @@ export class GoogleSheetsService {
   private async rowToInvoice(row: string[]): Promise<Invoice> {
     const lineItems = await this.getLineItems(row[0] || '');
     
+    // Parse recurring schedule if present
+    let recurringSchedule: Invoice['recurringSchedule'] = undefined;
+    if (row[14] === 'true' && row[15]) {
+      try {
+        const scheduleData = JSON.parse(row[15]);
+        recurringSchedule = {
+          frequency: scheduleData.frequency,
+          interval: scheduleData.interval,
+          startDate: new Date(scheduleData.startDate),
+          endDate: scheduleData.endDate ? new Date(scheduleData.endDate) : undefined,
+          nextInvoiceDate: new Date(scheduleData.nextInvoiceDate),
+          isActive: scheduleData.isActive
+        };
+      } catch (error) {
+        console.error('Error parsing recurring schedule:', error);
+      }
+    }
+    
     return {
       id: row[0] || '',
       invoiceNumber: row[1] || '',
@@ -517,13 +552,27 @@ export class GoogleSheetsService {
       balance: parseFloat(row[12] || '0'),
       notes: row[13] && row[13].trim() !== '' ? row[13] : undefined,
       isRecurring: row[14] === 'true',
-      sentDate: row[15] && row[15].trim() !== '' ? this.parseDate(row[15]) : undefined,
-      createdAt: this.parseDate(row[16] || ''),
-      updatedAt: this.parseDate(row[17] || '')
+      recurringSchedule,
+      sentDate: row[16] && row[16].trim() !== '' ? this.parseDate(row[16]) : undefined,
+      createdAt: this.parseDate(row[17] || ''),
+      updatedAt: this.parseDate(row[18] || '')
     };
   }
 
   private invoiceToRow(invoice: Invoice): string[] {
+    // Serialize recurring schedule if present
+    let recurringScheduleJson = '';
+    if (invoice.isRecurring && invoice.recurringSchedule) {
+      recurringScheduleJson = JSON.stringify({
+        frequency: invoice.recurringSchedule.frequency,
+        interval: invoice.recurringSchedule.interval,
+        startDate: invoice.recurringSchedule.startDate.toISOString(),
+        endDate: invoice.recurringSchedule.endDate?.toISOString(),
+        nextInvoiceDate: invoice.recurringSchedule.nextInvoiceDate.toISOString(),
+        isActive: invoice.recurringSchedule.isActive
+      });
+    }
+    
     return [
       invoice.id,
       invoice.invoiceNumber,
@@ -540,6 +589,7 @@ export class GoogleSheetsService {
       invoice.balance.toString(),
       invoice.notes || '',
       invoice.isRecurring.toString(),
+      recurringScheduleJson,
       invoice.sentDate?.toISOString() || '',
       invoice.createdAt.toISOString(),
       invoice.updatedAt.toISOString()
@@ -836,5 +886,136 @@ export class GoogleSheetsService {
       dateFormat: 'MM/dd/yyyy',
       timeZone: 'America/New_York'
     };
+  }
+
+  private calculateNextInvoiceDate(startDate: Date, frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly', interval: number): Date {
+    const nextDate = new Date(startDate);
+    
+    switch (frequency) {
+      case 'weekly':
+        nextDate.setDate(nextDate.getDate() + (7 * interval));
+        break;
+      case 'monthly':
+        nextDate.setMonth(nextDate.getMonth() + interval);
+        break;
+      case 'quarterly':
+        nextDate.setMonth(nextDate.getMonth() + (3 * interval));
+        break;
+      case 'yearly':
+        nextDate.setFullYear(nextDate.getFullYear() + interval);
+        break;
+    }
+    
+    return nextDate;
+  }
+
+  // Recurring invoice methods
+  async getRecurringInvoices(): Promise<Invoice[]> {
+    try {
+      const allInvoices = await this.getInvoices();
+      return allInvoices.filter(invoice => 
+        invoice.isRecurring && 
+        invoice.recurringSchedule?.isActive
+      );
+    } catch (error) {
+      console.error('Error getting recurring invoices:', error);
+      return [];
+    }
+  }
+
+  async getRecurringInvoicesDue(): Promise<Invoice[]> {
+    try {
+      const recurringInvoices = await this.getRecurringInvoices();
+      const now = new Date();
+      
+      return recurringInvoices.filter(invoice => {
+        if (!invoice.recurringSchedule) return false;
+        
+        const nextDate = invoice.recurringSchedule.nextInvoiceDate;
+        const endDate = invoice.recurringSchedule.endDate;
+        
+        // Check if it's time to generate the next invoice
+        const isDue = nextDate <= now;
+        
+        // Check if the recurring schedule hasn't ended
+        const hasNotEnded = !endDate || endDate > now;
+        
+        return isDue && hasNotEnded;
+      });
+    } catch (error) {
+      console.error('Error getting due recurring invoices:', error);
+      return [];
+    }
+  }
+
+  async generateRecurringInvoice(templateInvoice: Invoice): Promise<Invoice | null> {
+    try {
+      if (!templateInvoice.isRecurring || !templateInvoice.recurringSchedule) {
+        return null;
+      }
+
+      // Calculate the next invoice date after this one
+      const nextInvoiceDate = this.calculateNextInvoiceDate(
+        templateInvoice.recurringSchedule.nextInvoiceDate,
+        templateInvoice.recurringSchedule.frequency,
+        templateInvoice.recurringSchedule.interval
+      );
+
+      // Create new invoice based on template
+      const newInvoiceData: CreateInvoiceData = {
+        clientId: templateInvoice.clientId,
+        templateId: templateInvoice.templateId,
+        status: 'draft',
+        issueDate: new Date(),
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        lineItems: templateInvoice.lineItems.map(item => ({
+          id: this.generateId(),
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount
+        })),
+        subtotal: 0, // Will be calculated in service
+        taxRate: templateInvoice.taxRate,
+        taxAmount: 0, // Will be calculated in service
+        total: 0, // Will be calculated in service
+        notes: templateInvoice.notes,
+        isRecurring: false // Generated invoices are not recurring themselves
+      };
+
+      const newInvoice = await this.createInvoice(newInvoiceData);
+
+      // Update the template invoice's next invoice date
+      await this.updateInvoice(templateInvoice.id, {
+        recurringSchedule: {
+          ...templateInvoice.recurringSchedule,
+          nextInvoiceDate
+        }
+      });
+
+      return newInvoice;
+    } catch (error) {
+      console.error('Error generating recurring invoice:', error);
+      return null;
+    }
+  }
+
+  async toggleRecurringInvoice(id: string, isActive: boolean): Promise<Invoice | null> {
+    try {
+      const invoice = await this.getInvoice(id);
+      if (!invoice || !invoice.isRecurring || !invoice.recurringSchedule) {
+        return null;
+      }
+
+      return await this.updateInvoice(id, {
+        recurringSchedule: {
+          ...invoice.recurringSchedule,
+          isActive
+        }
+      });
+    } catch (error) {
+      console.error('Error toggling recurring invoice:', error);
+      return null;
+    }
   }
 }

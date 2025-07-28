@@ -56,6 +56,14 @@ export const recurringScheduleSchema = z.object({
   isActive: z.boolean(),
 });
 
+// Recurring schedule form validation schema (for form input)
+export const recurringScheduleFormSchema = z.object({
+  frequency: z.enum(['weekly', 'monthly', 'quarterly', 'yearly']),
+  interval: z.number().min(1, 'Interval must be at least 1').max(12, 'Interval too large'),
+  startDate: z.string().min(1, 'Start date is required'),
+  endDate: z.string().optional().or(z.literal('')),
+});
+
 // Invoice validation schemas
 export const invoiceFormSchema = z.object({
   clientId: z.string().min(1, 'Client is required'),
@@ -66,7 +74,7 @@ export const invoiceFormSchema = z.object({
   taxRate: z.number().min(0, 'Tax rate cannot be negative').max(100, 'Tax rate cannot exceed 100%'),
   notes: z.string().max(1000, 'Notes too long').optional().or(z.literal('')),
   isRecurring: z.boolean(),
-  recurringSchedule: recurringScheduleSchema.optional(),
+  recurringSchedule: recurringScheduleFormSchema.optional(),
 }).refine((data) => {
   if (data.isRecurring && !data.recurringSchedule) {
     return false;
@@ -82,6 +90,19 @@ export const invoiceFormSchema = z.object({
 }, {
   message: 'Due date must be on or after issue date',
   path: ['dueDate'],
+}).refine((data) => {
+  if (data.isRecurring && data.recurringSchedule) {
+    const startDate = new Date(data.recurringSchedule.startDate);
+    const endDate = data.recurringSchedule.endDate ? new Date(data.recurringSchedule.endDate) : null;
+    
+    if (endDate && endDate <= startDate) {
+      return false;
+    }
+  }
+  return true;
+}, {
+  message: 'End date must be after start date',
+  path: ['recurringSchedule', 'endDate'],
 });
 
 export const invoiceSchema = z.object({

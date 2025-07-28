@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
 export default function DashboardPage() {
   return (
@@ -77,6 +77,51 @@ export default function DashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recurring Invoices Widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Recurring Invoices</h2>
+              <CalendarIcon className="h-5 w-5 text-gray-400" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Active recurring invoices</span>
+                <span className="text-sm font-medium text-gray-900">0</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Due for generation</span>
+                <span className="text-sm font-medium text-orange-600">0</span>
+              </div>
+              <div className="pt-2">
+                <Button variant="outline" size="sm" className="w-full">
+                  View Recurring Invoices
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+            </div>
+            <div className="space-y-2">
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <PlusIcon className="h-4 w-4 mr-2" />
+                Create Invoice
+              </Button>
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                Generate Due Recurring Invoices
+              </Button>
             </div>
           </CardContent>
         </Card>

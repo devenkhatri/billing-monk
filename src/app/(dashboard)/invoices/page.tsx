@@ -6,10 +6,11 @@ import { InvoiceFormData } from '@/lib/validations';
 import { InvoiceForm } from '@/components/forms/invoice-form';
 import { InvoiceTable } from '@/components/tables/invoice-table';
 import { InvoiceDetail } from '@/components/invoices/invoice-detail';
+import { RecurringInvoiceList } from '@/components/invoices/recurring-invoice-list';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Alert } from '@/components/ui/alert';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, DocumentTextIcon, CalendarIcon } from '@heroicons/react/24/outline';
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -21,6 +22,7 @@ export default function InvoicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [activeTab, setActiveTab] = useState<'invoices' | 'recurring'>('invoices');
 
   // Fetch invoices and clients on component mount
   useEffect(() => {
@@ -269,6 +271,34 @@ export default function InvoicesPage() {
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'invoices'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <DocumentTextIcon className="h-5 w-5 inline mr-2" />
+            All Invoices
+          </button>
+          <button
+            onClick={() => setActiveTab('recurring')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'recurring'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <CalendarIcon className="h-5 w-5 inline mr-2" />
+            Recurring Invoices
+          </button>
+        </nav>
+      </div>
+
       {/* Alerts */}
       {error && (
         <Alert variant="error" onClose={() => setError(null)}>
@@ -282,17 +312,21 @@ export default function InvoicesPage() {
         </Alert>
       )}
 
-      {/* Invoice Table */}
-      <InvoiceTable
-        invoices={invoices}
-        clients={clients}
-        onEdit={handleEditInvoice}
-        onDelete={handleDeleteInvoice}
-        onView={handleViewInvoice}
-        onStatusChange={handleStatusChange}
-        onDownloadPDF={handleDownloadPDF}
-        isLoading={isLoading}
-      />
+      {/* Tab Content */}
+      {activeTab === 'invoices' ? (
+        <InvoiceTable
+          invoices={invoices}
+          clients={clients}
+          onEdit={handleEditInvoice}
+          onDelete={handleDeleteInvoice}
+          onView={handleViewInvoice}
+          onStatusChange={handleStatusChange}
+          onDownloadPDF={handleDownloadPDF}
+          isLoading={isLoading}
+        />
+      ) : (
+        <RecurringInvoiceList clients={clients} />
+      )}
 
       {/* Invoice Form Modal */}
       <Modal

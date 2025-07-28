@@ -5,6 +5,7 @@ import { Invoice, Client, ApiResponse, InvoiceStatus } from '@/types';
 import { InvoiceFormData } from '@/lib/validations';
 import { InvoiceForm } from '@/components/forms/invoice-form';
 import { InvoiceTable } from '@/components/tables/invoice-table';
+import { InvoiceDetail } from '@/components/invoices/invoice-detail';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { Alert } from '@/components/ui/alert';
@@ -19,6 +20,7 @@ export default function InvoicesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
 
   // Fetch invoices and clients on component mount
   useEffect(() => {
@@ -83,8 +85,15 @@ export default function InvoicesPage() {
   };
 
   const handleViewInvoice = (invoice: Invoice) => {
-    // TODO: Implement invoice view/preview functionality
-    console.log('View invoice:', invoice);
+    setViewingInvoice(invoice);
+  };
+
+  const handleCloseInvoiceDetail = () => {
+    setViewingInvoice(null);
+  };
+
+  const handleInvoiceUpdate = (updatedInvoice: Invoice) => {
+    setInvoices(prev => prev.map(i => i.id === updatedInvoice.id ? updatedInvoice : i));
   };
 
   const handleStatusChange = async (invoice: Invoice, newStatus: InvoiceStatus) => {
@@ -203,6 +212,11 @@ export default function InvoicesPage() {
     setEditingInvoice(null);
   };
 
+  // Get client for viewing invoice
+  const getClientById = (clientId: string): Client | undefined => {
+    return clients.find(client => client.id === clientId);
+  };
+
   // Clear alerts after 5 seconds
   useEffect(() => {
     if (error || success) {
@@ -266,6 +280,23 @@ export default function InvoicesPage() {
           onCancel={handleFormCancel}
           isLoading={isSubmitting}
         />
+      </Modal>
+
+      {/* Invoice Detail Modal */}
+      <Modal
+        isOpen={!!viewingInvoice}
+        onClose={handleCloseInvoiceDetail}
+        title="Invoice Details"
+        size="xl"
+      >
+        {viewingInvoice && (
+          <InvoiceDetail
+            invoice={viewingInvoice}
+            client={getClientById(viewingInvoice.clientId)!}
+            onClose={handleCloseInvoiceDetail}
+            onInvoiceUpdate={handleInvoiceUpdate}
+          />
+        )}
       </Modal>
     </div>
   );

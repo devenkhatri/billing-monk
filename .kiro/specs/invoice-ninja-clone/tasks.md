@@ -49,14 +49,14 @@
   - Add invoice editing functionality with real-time calculations
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 8. Create payment tracking and management features
+- [x] 8. Create payment tracking and management features
   - Implement payment recording form with invoice association
   - Build payment history display for individual invoices
   - Create automatic balance calculation and status updates
   - Add payment list view with filtering by invoice or date
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 9. Build PDF generation and invoice delivery system
+- [-] 9. Build PDF generation and invoice delivery system
   - Implement PDF generation service using jsPDF or similar library
   - Create professional invoice template with company branding
   - Build invoice preview functionality before sending

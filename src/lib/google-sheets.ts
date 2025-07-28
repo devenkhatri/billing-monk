@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, LineItem, InvoiceStatus } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData } from '@/types';
 import { generateId } from './utils';
 
 export class GoogleSheetsService {
@@ -567,6 +567,165 @@ export class GoogleSheetsService {
       item.quantity.toString(),
       item.rate.toString(),
       item.amount.toString()
+    ];
+  }
+
+  // Payment methods
+  async getPayments(invoiceId?: string): Promise<Payment[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Payments!A2:G'
+      });
+
+      const rows = response.data.values || [];
+      const payments = rows.map(row => this.rowToPayment(row));
+      
+      if (invoiceId) {
+        return payments.filter(payment => payment.invoiceId === invoiceId);
+      }
+      
+      return payments;
+    } catch (error) {
+      console.error('Error getting payments:', error);
+      return [];
+    }
+  }
+
+  async createPayment(paymentData: CreatePaymentData): Promise<Payment> {
+    const payment: Payment = {
+      id: this.generateId(),
+      ...paymentData,
+      createdAt: new Date()
+    };
+
+    // Save payment
+    await this.sheets.spreadsheets.values.append({
+      spreadsheetId: this.spreadsheetId,
+      range: 'Payments!A:G',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [this.paymentToRow(payment)]
+      }
+    });
+
+    // Update invoice paid amount and balance
+    await this.updateInvoicePaymentStatus(payment.invoiceId, payment.amount);
+
+    return payment;
+  }
+
+  async getPayment(id: string): Promise<Payment | null> {
+    try {
+      const payments = await this.getPayments();
+      return payments.find(payment => payment.id === id) || null;
+    } catch (error) {
+      console.error('Error getting payment:', error);
+      return null;
+    }
+  }
+
+  async deletePayment(id: string): Promise<boolean> {
+    try {
+      // Get the payment first to know which invoice to update
+      const payment = await this.getPayment(id);
+      if (!payment) {
+        return false;
+      }
+
+      // Get all payments to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Payments!A2:G'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false; // Payment not found
+      }
+
+      // Delete the row (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 3, // Assuming Payments sheet is the fourth sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1, // 0-based index
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      // Update invoice paid amount and balance (subtract the deleted payment)
+      await this.updateInvoicePaymentStatus(payment.invoiceId, -payment.amount);
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      return false;
+    }
+  }
+
+  private async updateInvoicePaymentStatus(invoiceId: string, paymentAmount: number): Promise<void> {
+    try {
+      const invoice = await this.getInvoice(invoiceId);
+      if (!invoice) {
+        return;
+      }
+
+      const newPaidAmount = Math.max(0, invoice.paidAmount + paymentAmount);
+      const newBalance = invoice.total - newPaidAmount;
+      
+      // Determine new status
+      let newStatus: InvoiceStatus = invoice.status;
+      if (newBalance <= 0) {
+        newStatus = 'paid';
+      } else if (newPaidAmount > 0 && invoice.status === 'draft') {
+        newStatus = 'sent'; // Assume invoice was sent if payment received
+      } else if (newBalance > 0 && new Date() > invoice.dueDate) {
+        newStatus = 'overdue';
+      }
+
+      // Update the invoice
+      await this.updateInvoice(invoiceId, {
+        paidAmount: newPaidAmount,
+        balance: newBalance,
+        status: newStatus
+      });
+    } catch (error) {
+      console.error('Error updating invoice payment status:', error);
+    }
+  }
+
+  private rowToPayment(row: string[]): Payment {
+    return {
+      id: row[0] || '',
+      invoiceId: row[1] || '',
+      amount: parseFloat(row[2] || '0'),
+      paymentDate: this.parseDate(row[3] || ''),
+      paymentMethod: (row[4] as any) || 'other',
+      notes: row[5] && row[5].trim() !== '' ? row[5] : undefined,
+      createdAt: this.parseDate(row[6] || '')
+    };
+  }
+
+  private paymentToRow(payment: Payment): string[] {
+    return [
+      payment.id,
+      payment.invoiceId,
+      payment.amount.toString(),
+      payment.paymentDate.toISOString(),
+      payment.paymentMethod,
+      payment.notes || '',
+      payment.createdAt.toISOString()
     ];
   }
 }

@@ -23,14 +23,14 @@ const bulkUpdateSchema = z.object({
   type: z.enum(['clients', 'invoices', 'payments', 'templates']),
   updates: z.array(z.object({
     id: z.string(),
-    data: z.record(z.any())
+    data: z.record(z.string(), z.any())
   })).min(1, 'At least one update is required')
 });
 
 const bulkCreateSchema = z.object({
   operation: z.literal('create'),
   type: z.enum(['clients', 'invoices', 'payments', 'templates']),
-  items: z.array(z.record(z.any())).min(1, 'At least one item is required')
+  items: z.array(z.record(z.string(), z.any())).min(1, 'At least one item is required')
 });
 
 const bulkOperationSchema = z.discriminatedUnion('operation', [
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return validationResult.error;
     }
 
-    const data = validationResult.data;
+    const data = validationResult.data!;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
 
     switch (data.operation) {
@@ -73,12 +73,12 @@ export async function POST(request: NextRequest) {
         return await handleBulkCreate(sheetsService, data.type, data.items);
       
       default:
-        return createErrorResponse('INVALID_OPERATION', 'Unsupported bulk operation', 400);
+        return createErrorResponse('INVALID_INPUT', 'Unsupported bulk operation', 400);
     }
   } catch (error) {
     console.error('Bulk operation error:', error);
     return createErrorResponse(
-      'BULK_OPERATION_ERROR',
+      'INTERNAL_ERROR',
       'Failed to perform bulk operation',
       500,
       error

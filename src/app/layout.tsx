@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { NotificationProvider } from "@/lib/notification-context";
+import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,9 +30,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <a href="#main-content" className="skip-to-content">
+          Skip to main content
+        </a>
         <ErrorBoundary>
           <NotificationProvider>
-            {children}
+            <KeyboardShortcutsProvider>
+              {children}
+            </KeyboardShortcutsProvider>
           </NotificationProvider>
         </ErrorBoundary>
       </body>

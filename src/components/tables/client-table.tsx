@@ -106,104 +106,114 @@ export function ClientTable({ clients, onEdit, onDelete, onView, isLoading = fal
           <p className="text-gray-500">No clients found</p>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead
-                sortable
-                onSort={() => handleSort('name')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Name</span>
-                  <span className="text-xs">{getSortIcon('name')}</span>
-                </div>
-              </TableHead>
-              <TableHead
-                sortable
-                onSort={() => handleSort('email')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Email</span>
-                  <span className="text-xs">{getSortIcon('email')}</span>
-                </div>
-              </TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead
-                sortable
-                onSort={() => handleSort('address')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Location</span>
-                  <span className="text-xs">{getSortIcon('address')}</span>
-                </div>
-              </TableHead>
-              <TableHead
-                sortable
-                onSort={() => handleSort('createdAt')}
-              >
-                <div className="flex items-center space-x-1">
-                  <span>Created</span>
-                  <span className="text-xs">{getSortIcon('createdAt')}</span>
-                </div>
-              </TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedClients.map((client) => (
-              <TableRow key={client.id}>
-                <TableCell>
-                  <div className="font-medium text-gray-900">{client.name}</div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-gray-600">{client.email}</div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-gray-600">{client.phone || '-'}</div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-gray-600">
-                    {client.address.city}, {client.address.country}
+        <div className="table-responsive">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead
+                  sortable
+                  onSort={() => handleSort('name')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Name</span>
+                    <span className="text-xs">{getSortIcon('name')}</span>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-gray-600">
-                    {new Date(client.createdAt).toLocaleDateString()}
+                </TableHead>
+                <TableHead
+                  sortable
+                  onSort={() => handleSort('email')}
+                  className="hidden sm:table-cell"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Email</span>
+                    <span className="text-xs">{getSortIcon('email')}</span>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onView(client)}
-                      disabled={isLoading}
-                    >
-                      View
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onEdit(client)}
-                      disabled={isLoading}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteClick(client)}
-                      disabled={isLoading}
-                      className="text-red-600 hover:text-red-700 hover:border-red-300"
-                    >
-                      Delete
-                    </Button>
+                </TableHead>
+                <TableHead className="hidden md:table-cell">Phone</TableHead>
+                <TableHead
+                  sortable
+                  onSort={() => handleSort('address')}
+                  className="hidden lg:table-cell"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Location</span>
+                    <span className="text-xs">{getSortIcon('address')}</span>
                   </div>
-                </TableCell>
+                </TableHead>
+                <TableHead
+                  sortable
+                  onSort={() => handleSort('createdAt')}
+                  className="hidden xl:table-cell"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Created</span>
+                    <span className="text-xs">{getSortIcon('createdAt')}</span>
+                  </div>
+                </TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sortedClients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    <div className="font-medium text-gray-900">{client.name}</div>
+                    <div className="text-sm text-gray-500 sm:hidden">
+                      {client.email}
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <div className="text-gray-600">{client.email}</div>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <div className="text-gray-600">{client.phone || '-'}</div>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <div className="text-gray-600">
+                      {client.address.city}, {client.address.country}
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden xl:table-cell">
+                    <div className="text-gray-600">
+                      {new Date(client.createdAt).toLocaleDateString()}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onView(client)}
+                        disabled={isLoading}
+                        className="w-full sm:w-auto"
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onEdit(client)}
+                        disabled={isLoading}
+                        className="w-full sm:w-auto"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteClick(client)}
+                        disabled={isLoading}
+                        className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:border-red-300"
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

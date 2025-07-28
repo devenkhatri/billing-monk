@@ -1,6 +1,6 @@
 'use client';
 
-import { ErrorCode, getUserFriendlyMessage } from './error-handler';
+import { ErrorCode, getUserFriendlyMessage } from './client-error-handler';
 
 // API response types
 interface ApiSuccessResponse<T> {

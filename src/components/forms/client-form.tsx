@@ -26,7 +26,7 @@ export function ClientForm({ client, onSubmit, onCancel, isLoading = false }: Cl
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting: isFormSubmitting },
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientFormSchema),
     defaultValues: client ? {
@@ -65,7 +65,7 @@ export function ClientForm({ client, onSubmit, onCancel, isLoading = false }: Cl
     }
   };
 
-  const isSubmitting = state.loading || isLoading;
+  const isSubmitting = state.loading || isLoading || isFormSubmitting;
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">

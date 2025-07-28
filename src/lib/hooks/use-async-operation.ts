@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useNotifications } from '../notification-context';
-import { getUserFriendlyMessage, ErrorCode } from '../error-handler';
+import { getUserFriendlyMessage, ErrorCode } from '../client-error-handler';
 
 interface AsyncOperationState<T> {
   data: T | null;

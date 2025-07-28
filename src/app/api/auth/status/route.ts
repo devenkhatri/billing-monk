@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest) {
     
     if (!session) {
       return createErrorResponse(
-        'UNAUTHENTICATED',
+        'UNAUTHORIZED',
         'No active session found',
         401
       )
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest) {
     console.error('Auth status check error:', error)
     
     return createErrorResponse(
-      'AUTH_STATUS_ERROR',
+      'INTERNAL_ERROR',
       'Failed to check authentication status',
       500
     )

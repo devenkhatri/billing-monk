@@ -54,9 +54,14 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, []);
 
-  const handleDateRangeChange = (dateFrom: string, dateTo: string) => {
-    setDateRange({ from: dateFrom, to: dateTo });
-    fetchDashboardData(dateFrom, dateTo);
+  const handleDateRangeChange = (dateFrom?: string, dateTo?: string) => {
+    if (dateFrom && dateTo) {
+      setDateRange({ from: dateFrom, to: dateTo });
+      fetchDashboardData(dateFrom, dateTo);
+    } else {
+      setDateRange({ from: '', to: '' });
+      fetchDashboardData();
+    }
   };
 
   // Generate chart data from metrics

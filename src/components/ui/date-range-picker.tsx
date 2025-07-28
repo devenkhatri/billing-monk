@@ -5,13 +5,15 @@ import { Button } from './button';
 import { CalendarIcon } from '@heroicons/react/24/outline';
 
 interface DateRangePickerProps {
-  onDateRangeChange: (dateFrom: string, dateTo: string) => void;
+  onDateRangeChange: (dateFrom?: string, dateTo?: string) => void;
+  dateFrom?: string;
+  dateTo?: string;
   className?: string;
 }
 
-export function DateRangePicker({ onDateRangeChange, className = '' }: DateRangePickerProps) {
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+export function DateRangePicker({ onDateRangeChange, dateFrom: initialDateFrom = '', dateTo: initialDateTo = '', className = '' }: DateRangePickerProps) {
+  const [dateFrom, setDateFrom] = useState(initialDateFrom);
+  const [dateTo, setDateTo] = useState(initialDateTo);
   const [isOpen, setIsOpen] = useState(false);
 
   const handleApply = () => {
@@ -70,7 +72,7 @@ export function DateRangePicker({ onDateRangeChange, className = '' }: DateRange
   const handleClear = () => {
     setDateFrom('');
     setDateTo('');
-    onDateRangeChange('', '');
+    onDateRangeChange(undefined, undefined);
     setIsOpen(false);
   };
 

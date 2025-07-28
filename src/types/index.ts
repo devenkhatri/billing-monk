@@ -1,4 +1,22 @@
 // Core data types for the Invoice Ninja clone application
+import { DefaultSession } from 'next-auth'
+
+// NextAuth session extension
+declare module 'next-auth' {
+  interface Session extends DefaultSession {
+    accessToken?: string
+    error?: string
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    accessToken?: string
+    refreshToken?: string
+    accessTokenExpires?: number
+    error?: string
+  }
+}
 
 // Address interface for reusability
 export interface Address {

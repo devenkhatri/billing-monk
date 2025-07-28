@@ -14,14 +14,14 @@
   - Create utility types for form handling and API operations
   - _Requirements: 1.3, 2.4, 3.2, 6.5_
 
-- [ ] 3. Set up Google Sheets API integration and authentication
+- [x] 3. Set up Google Sheets API integration and authentication
   - Configure Google OAuth and NextAuth.js for user authentication
   - Implement Google Sheets API v4 client setup and credentials management
   - Create environment variable configuration for API keys and settings
   - Build authentication middleware for protecting API routes
   - _Requirements: 7.1, 7.4_
 
-- [ ] 4. Create Google Sheets service layer and data operations
+- [x] 4. Create Google Sheets service layer and data operations
   - Implement GoogleSheetsService class with CRUD operations for all entities
   - Create methods for reading from and writing to Google Sheets
   - Implement data transformation between sheets format and application models

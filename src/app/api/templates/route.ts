@@ -1,74 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ApiResponse, Template } from '@/types';
+import { GoogleSheetsService } from '@/lib/google-sheets';
+import { templateFormSchema } from '@/lib/validations';
+import { ApiResponse, Template, CreateTemplateData } from '@/types';
+import { generateId } from '@/lib/utils';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    // For now, return some mock templates since template management isn't implemented yet
-    // This will be replaced with actual Google Sheets integration when templates are implemented
-    const mockTemplates: Template[] = [
-      {
-        id: 'template-1',
-        name: 'Web Development Services',
-        description: 'Standard web development template',
-        lineItems: [
-          { description: 'Frontend Development', quantity: 40, rate: 75, amount: 3000 },
-          { description: 'Backend Development', quantity: 30, rate: 85, amount: 2550 },
-          { description: 'Testing & QA', quantity: 10, rate: 65, amount: 650 }
-        ],
-        taxRate: 8.5,
-        notes: 'Payment due within 30 days',
-        isActive: true,
-        createdAt: new Date('2024-01-01'),
-        updatedAt: new Date('2024-01-01')
-      },
-      {
-        id: 'template-2',
-        name: 'Consulting Services',
-        description: 'Standard consulting template',
-        lineItems: [
-          { description: 'Strategy Consultation', quantity: 8, rate: 150, amount: 1200 },
-          { description: 'Implementation Support', quantity: 16, rate: 125, amount: 2000 }
-        ],
-        taxRate: 8.5,
-        notes: 'Net 15 payment terms',
-        isActive: true,
-        createdAt: new Date('2024-01-01'),
-        updatedAt: new Date('2024-01-01')
-      },
-      {
-        id: 'template-3',
-        name: 'Design Services',
-        description: 'Standard design template',
-        lineItems: [
-          { description: 'UI/UX Design', quantity: 20, rate: 95, amount: 1900 },
-          { description: 'Graphic Design', quantity: 15, rate: 80, amount: 1200 },
-          { description: 'Design Revisions', quantity: 5, rate: 70, amount: 350 }
-        ],
-        taxRate: 8.5,
-        notes: 'Payment due upon completion',
-        isActive: true,
-        createdAt: new Date('2024-01-01'),
-        updatedAt: new Date('2024-01-01')
-      }
-    ];
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
 
-    const response: ApiResponse<Template[]> = {
-      success: true,
-      data: mockTemplates
-    };
+    const { searchParams } = new URL(request.url);
+    const activeOnly = searchParams.get('active') === 'true';
 
-    return NextResponse.json(response);
+    const sheetsService = await GoogleSheetsService.getAuthenticatedService();
+    let templates = await sheetsService.getTemplates();
+
+    // Filter active templates if requested
+    if (activeOnly) {
+      templates = templates.filter(template => template.isActive);
+    }
+
+    return createSuccessResponse(templates);
   } catch (error) {
     console.error('Error fetching templates:', error);
+    return createErrorResponse(
+      'FETCH_ERROR',
+      'Failed to fetch templates',
+      500,
+      error
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
+    const body = await request.json();
     
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: 'Failed to fetch templates'
-      }
+    // Validate the request body
+    const result = templateFormSchema.safeParse(body);
+    if (!result.success) {
+      return createErrorResponse(
+        'VALIDATION_ERROR',
+        'Invalid template data',
+        400,
+        result.error.issues
+      );
+    }
+
+    const formData = result.data;
+    
+    // Transform form data to create template data
+    const lineItems = formData.lineItems.map(item => ({
+      description: item.description,
+      quantity: item.quantity,
+      rate: item.rate,
+      amount: item.quantity * item.rate
+    }));
+
+    const createData: CreateTemplateData = {
+      name: formData.name,
+      description: formData.description,
+      lineItems,
+      taxRate: formData.taxRate,
+      notes: formData.notes,
+      isActive: formData.isActive
     };
 
-    return NextResponse.json(response, { status: 500 });
+    const sheetsService = await GoogleSheetsService.getAuthenticatedService();
+    const template = await sheetsService.createTemplate(createData);
+
+    return createSuccessResponse(template, 201);
+  } catch (error) {
+    console.error('Error creating template:', error);
+    return createErrorResponse(
+      'CREATE_ERROR',
+      'Failed to create template',
+      500,
+      error
+    );
   }
 }

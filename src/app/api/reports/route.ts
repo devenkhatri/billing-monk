@@ -1,42 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { RevenueReport, ClientReport, InvoiceStatusReport, InvoiceStatus } from '@/types';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const reportType = searchParams.get('type');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const clientId = searchParams.get('clientId');
 
+    if (!reportType) {
+      return createErrorResponse('VALIDATION_ERROR', 'Report type is required', 400);
+    }
+
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
 
     switch (reportType) {
       case 'revenue':
         const revenueReport = await generateRevenueReport(sheetsService, dateFrom, dateTo);
-        return NextResponse.json({ success: true, data: revenueReport });
+        return createSuccessResponse(revenueReport);
 
       case 'client':
         const clientReport = await generateClientReport(sheetsService, dateFrom, dateTo, clientId);
-        return NextResponse.json({ success: true, data: clientReport });
+        return createSuccessResponse(clientReport);
 
       case 'invoice-status':
         const statusReport = await generateInvoiceStatusReport(sheetsService, dateFrom, dateTo);
-        return NextResponse.json({ success: true, data: statusReport });
+        return createSuccessResponse(statusReport);
 
       default:
-        return NextResponse.json({
-          success: false,
-          error: { code: 'INVALID_REPORT_TYPE', message: 'Invalid report type specified' }
-        }, { status: 400 });
+        return createErrorResponse('INVALID_REPORT_TYPE', 'Invalid report type specified', 400);
     }
   } catch (error) {
     console.error('Error generating report:', error);
-    return NextResponse.json({
-      success: false,
-      error: { code: 'REPORT_GENERATION_FAILED', message: 'Failed to generate report' }
-    }, { status: 500 });
+    return createErrorResponse(
+      'REPORT_GENERATION_FAILED',
+      'Failed to generate report',
+      500,
+      error
+    );
   }
 }
 

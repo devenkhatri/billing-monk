@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { clientFormSchema, clientFiltersSchema, paginationSchema } from '@/lib/validations';
 import { ApiResponse, Client, ClientFilters, PaginationParams } from '@/types';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     
     // Parse query parameters
@@ -26,18 +35,15 @@ export async function GET(request: NextRequest) {
     const paginationResult = paginationSchema.safeParse(pagination);
 
     if (!filtersResult.success || !paginationResult.success) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid query parameters',
-          details: {
-            filters: filtersResult.error?.issues,
-            pagination: paginationResult.error?.issues,
-          },
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse(
+        'VALIDATION_ERROR',
+        'Invalid query parameters',
+        400,
+        {
+          filters: filtersResult.error?.issues,
+          pagination: paginationResult.error?.issues,
+        }
+      );
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
@@ -81,48 +87,46 @@ export async function GET(request: NextRequest) {
     const endIndex = startIndex + pagination.limit!;
     const paginatedClients = clients.slice(startIndex, endIndex);
 
-    const response: ApiResponse<Client[]> = {
-      success: true,
-      data: paginatedClients,
-      meta: {
+    return createSuccessResponse(
+      paginatedClients,
+      200,
+      {
         total,
         page: pagination.page!,
         limit: pagination.limit!,
         hasMore: endIndex < total,
-      },
-    };
-
-    return NextResponse.json(response);
+      }
+    );
   } catch (error) {
     console.error('Error fetching clients:', error);
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch clients',
-        details: error,
-      },
-    };
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to fetch clients',
+      500,
+      error
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const body = await request.json();
     
     // Validate request body
     const result = clientFormSchema.safeParse(body);
     if (!result.success) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid client data',
-          details: result.error.issues,
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse(
+        'VALIDATION_ERROR',
+        'Invalid client data',
+        400,
+        result.error.issues
+      );
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
@@ -143,22 +147,14 @@ export async function POST(request: NextRequest) {
 
     const client = await sheetsService.createClient(createData);
 
-    const response: ApiResponse<Client> = {
-      success: true,
-      data: client,
-    };
-
-    return NextResponse.json(response, { status: 201 });
+    return createSuccessResponse(client, 201);
   } catch (error) {
     console.error('Error creating client:', error);
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to create client',
-        details: error,
-      },
-    };
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to create client',
+      500,
+      error
+    );
   }
 }

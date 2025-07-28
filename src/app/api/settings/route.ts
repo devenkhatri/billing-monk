@@ -1,68 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
+import { companySettingsFormSchema } from '@/lib/validations';
 import { CompanySettings, ApiResponse } from '@/types';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-export async function GET(): Promise<NextResponse<ApiResponse<CompanySettings>>> {
+export async function GET(request: NextRequest): Promise<NextResponse<ApiResponse<CompanySettings>>> {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const settings = await sheetsService.getCompanySettings();
     
     if (!settings) {
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: 'SETTINGS_NOT_FOUND',
-          message: 'Company settings not found'
-        }
-      }, { status: 404 });
+      return createErrorResponse('SETTINGS_NOT_FOUND', 'Company settings not found', 404);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: settings
-    });
+    return createSuccessResponse(settings);
   } catch (error) {
     console.error('Error fetching company settings:', error);
-    return NextResponse.json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch company settings'
-      }
-    }, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to fetch company settings',
+      500,
+      error
+    );
   }
 }
 
 export async function PUT(request: NextRequest): Promise<NextResponse<ApiResponse<CompanySettings>>> {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const body = await request.json();
     
-    // Basic validation
-    if (!body.name || !body.email) {
-      return NextResponse.json({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Company name and email are required'
-        }
-      }, { status: 400 });
+    // Validate request body
+    const result = companySettingsFormSchema.safeParse(body);
+    if (!result.success) {
+      return createErrorResponse(
+        'VALIDATION_ERROR',
+        'Invalid company settings data',
+        400,
+        result.error.issues
+      );
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const updatedSettings = await sheetsService.updateCompanySettings(body);
+    
+    // Transform form data to settings data
+    const settingsData: CompanySettings = {
+      name: result.data.name,
+      email: result.data.email,
+      phone: result.data.phone || undefined,
+      address: {
+        street: result.data.street,
+        city: result.data.city,
+        state: result.data.state,
+        zipCode: result.data.zipCode,
+        country: result.data.country,
+      },
+      taxRate: result.data.taxRate,
+      paymentTerms: result.data.paymentTerms,
+      invoiceTemplate: result.data.invoiceTemplate,
+      currency: result.data.currency,
+      dateFormat: result.data.dateFormat,
+      timeZone: result.data.timeZone,
+    };
 
-    return NextResponse.json({
-      success: true,
-      data: updatedSettings
-    });
+    const updatedSettings = await sheetsService.updateCompanySettings(settingsData);
+
+    return createSuccessResponse(updatedSettings);
   } catch (error) {
     console.error('Error updating company settings:', error);
-    return NextResponse.json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to update company settings'
-      }
-    }, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to update company settings',
+      500,
+      error
+    );
   }
 }

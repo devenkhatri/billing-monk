@@ -3,15 +3,13 @@ import { GoogleSheetsService } from '@/lib/google-sheets';
 import { DashboardMetrics, ActivityItem } from '@/types';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return NextResponse.json(
-        { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
-        { status: 401 }
-      );
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
 
     const { searchParams } = new URL(request.url);
@@ -126,22 +124,15 @@ export async function GET(request: NextRequest) {
       recentActivity: limitedActivity
     };
 
-    return NextResponse.json({
-      success: true,
-      data: metrics
-    });
+    return createSuccessResponse(metrics);
 
   } catch (error) {
     console.error('Dashboard API error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: { 
-          code: 'INTERNAL_ERROR', 
-          message: 'Failed to fetch dashboard metrics' 
-        } 
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to fetch dashboard metrics',
+      500,
+      error
     );
   }
 }

@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData } from '@/types';
 import { generateId } from './utils';
 
 export class GoogleSheetsService {
@@ -1017,5 +1017,285 @@ export class GoogleSheetsService {
       console.error('Error toggling recurring invoice:', error);
       return null;
     }
+  }
+
+  // Template methods
+  async getTemplates(): Promise<Template[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Templates!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const templates = await Promise.all(rows.map(row => this.rowToTemplate(row)));
+      return templates;
+    } catch (error) {
+      console.error('Error getting templates:', error);
+      return [];
+    }
+  }
+
+  async createTemplate(templateData: CreateTemplateData): Promise<Template> {
+    const template: Template = {
+      id: this.generateId(),
+      ...templateData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Save template header
+    await this.sheets.spreadsheets.values.append({
+      spreadsheetId: this.spreadsheetId,
+      range: 'Templates!A:I',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [this.templateToRow(template)]
+      }
+    });
+
+    // Save template line items
+    if (template.lineItems.length > 0) {
+      const lineItemRows = template.lineItems.map(item => this.templateLineItemToRow(template.id, item));
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TemplateLineItems!A:F',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: lineItemRows
+        }
+      });
+    }
+
+    return template;
+  }
+
+  async getTemplate(id: string): Promise<Template | null> {
+    try {
+      const templates = await this.getTemplates();
+      return templates.find(template => template.id === id) || null;
+    } catch (error) {
+      console.error('Error getting template:', error);
+      return null;
+    }
+  }
+
+  async updateTemplate(id: string, updates: UpdateTemplateData): Promise<Template | null> {
+    try {
+      // Get all templates to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Templates!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return null; // Template not found
+      }
+
+      // Get the existing template data
+      const existingRow = rows[rowIndex];
+      if (!existingRow) {
+        return null;
+      }
+      const existingTemplate = await this.rowToTemplate(existingRow);
+      
+      // Merge updates with existing data
+      const updatedTemplate = {
+        ...existingTemplate,
+        ...updates,
+        id, // Ensure ID doesn't change
+        updatedAt: new Date()
+      };
+
+      // Update the row in Google Sheets (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Templates!A${sheetRowIndex}:I${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.templateToRow(updatedTemplate)]
+        }
+      });
+
+      // Update line items if they changed
+      if (updates.lineItems) {
+        // Delete existing line items
+        await this.deleteTemplateLineItems(id);
+        
+        // Add new line items
+        if (updates.lineItems.length > 0) {
+          const lineItemRows = updates.lineItems.map(item => this.templateLineItemToRow(id, item));
+          await this.sheets.spreadsheets.values.append({
+            spreadsheetId: this.spreadsheetId,
+            range: 'TemplateLineItems!A:F',
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: lineItemRows
+            }
+          });
+        }
+      }
+
+      return updatedTemplate;
+    } catch (error) {
+      console.error('Error updating template:', error);
+      return null;
+    }
+  }
+
+  async deleteTemplate(id: string): Promise<boolean> {
+    try {
+      // Delete template line items first
+      await this.deleteTemplateLineItems(id);
+
+      // Get all templates to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Templates!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false; // Template not found
+      }
+
+      // Delete the row (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 4, // Assuming Templates sheet is the fifth sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1, // 0-based index
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      return false;
+    }
+  }
+
+  private async deleteTemplateLineItems(templateId: string): Promise<void> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TemplateLineItems!A2:F'
+      });
+
+      const rows = response.data.values || [];
+      const rowsToDelete: number[] = [];
+
+      // Find all rows that belong to this template
+      rows.forEach((row, index) => {
+        if (row && row[1] === templateId) { // Column B contains templateId
+          rowsToDelete.push(index + 2); // +2 because we start from A2
+        }
+      });
+
+      // Delete rows in reverse order to maintain correct indices
+      for (const rowIndex of rowsToDelete.reverse()) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: 5, // Assuming TemplateLineItems sheet is the sixth sheet
+                  dimension: 'ROWS',
+                  startIndex: rowIndex - 1, // 0-based index
+                  endIndex: rowIndex
+                }
+              }
+            }]
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting template line items:', error);
+    }
+  }
+
+  private async getTemplateLineItems(templateId: string): Promise<Omit<LineItem, 'id'>[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TemplateLineItems!A2:F'
+      });
+
+      const rows = response.data.values || [];
+      return rows
+        .filter(row => row && row[1] === templateId) // Column B contains templateId
+        .map(row => this.rowToTemplateLineItem(row));
+    } catch (error) {
+      console.error('Error getting template line items:', error);
+      return [];
+    }
+  }
+
+  private async rowToTemplate(row: string[]): Promise<Template> {
+    const lineItems = await this.getTemplateLineItems(row[0] || '');
+    
+    return {
+      id: row[0] || '',
+      name: row[1] || '',
+      description: row[2] && row[2].trim() !== '' ? row[2] : undefined,
+      lineItems,
+      taxRate: parseFloat(row[3] || '0'),
+      notes: row[4] && row[4].trim() !== '' ? row[4] : undefined,
+      isActive: row[5] === 'true',
+      createdAt: this.parseDate(row[6] || ''),
+      updatedAt: this.parseDate(row[7] || '')
+    };
+  }
+
+  private templateToRow(template: Template): string[] {
+    return [
+      template.id,
+      template.name,
+      template.description || '',
+      template.taxRate.toString(),
+      template.notes || '',
+      template.isActive.toString(),
+      template.createdAt.toISOString(),
+      template.updatedAt.toISOString()
+    ];
+  }
+
+  private rowToTemplateLineItem(row: string[]): Omit<LineItem, 'id'> {
+    const quantity = parseFloat(row[3] || '0');
+    const rate = parseFloat(row[4] || '0');
+    
+    return {
+      description: row[2] || '',
+      quantity,
+      rate,
+      amount: quantity * rate
+    };
+  }
+
+  private templateLineItemToRow(templateId: string, item: Omit<LineItem, 'id'>): string[] {
+    return [
+      this.generateId(),
+      templateId,
+      item.description,
+      item.quantity.toString(),
+      item.rate.toString(),
+      item.amount.toString()
+    ];
   }
 }

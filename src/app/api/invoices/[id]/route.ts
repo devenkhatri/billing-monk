@@ -3,45 +3,43 @@ import { GoogleSheetsService } from '@/lib/google-sheets';
 import { invoiceFormSchema } from '@/lib/validations';
 import { ApiResponse, Invoice, UpdateInvoiceData, LineItem } from '@/types';
 import { generateId } from '@/lib/utils';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await params;
+    
+    if (!id) {
+      return createErrorResponse('VALIDATION_ERROR', 'Invoice ID is required', 400);
+    }
+
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const invoice = await sheetsService.getInvoice(id);
 
     if (!invoice) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Invoice not found'
-        }
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Invoice not found', 404);
     }
 
-    const response: ApiResponse<Invoice> = {
-      success: true,
-      data: invoice
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse(invoice);
   } catch (error) {
     console.error('Error fetching invoice:', error);
-    
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: 'Failed to fetch invoice'
-      }
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'FETCH_ERROR',
+      'Failed to fetch invoice',
+      500,
+      error
+    );
   }
 }
 
@@ -50,7 +48,18 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await params;
+    
+    if (!id) {
+      return createErrorResponse('VALIDATION_ERROR', 'Invoice ID is required', 400);
+    }
+
     const body = await request.json();
     
     // Check if this is a status update or full form update
@@ -68,15 +77,12 @@ export async function PUT(
       // Full form update - validate with schema
       const validationResult = invoiceFormSchema.safeParse(body);
       if (!validationResult.success) {
-        const response: ApiResponse<never> = {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid invoice data',
-            details: validationResult.error.issues
-          }
-        };
-        return NextResponse.json(response, { status: 400 });
+        return createErrorResponse(
+          'VALIDATION_ERROR',
+          'Invalid invoice data',
+          400,
+          validationResult.error.issues
+        );
       }
 
       const formData = validationResult.data;
@@ -120,34 +126,18 @@ export async function PUT(
     const invoice = await sheetsService.updateInvoice(id, updateData);
 
     if (!invoice) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Invoice not found'
-        }
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Invoice not found', 404);
     }
 
-    const response: ApiResponse<Invoice> = {
-      success: true,
-      data: invoice
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse(invoice);
   } catch (error) {
     console.error('Error updating invoice:', error);
-    
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'UPDATE_ERROR',
-        message: 'Failed to update invoice'
-      }
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'UPDATE_ERROR',
+      'Failed to update invoice',
+      500,
+      error
+    );
   }
 }
 
@@ -156,38 +146,33 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await params;
+    
+    if (!id) {
+      return createErrorResponse('VALIDATION_ERROR', 'Invoice ID is required', 400);
+    }
+
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const success = await sheetsService.deleteInvoice(id);
 
     if (!success) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Invoice not found'
-        }
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Invoice not found', 404);
     }
 
-    const response: ApiResponse<{ message: string }> = {
-      success: true,
-      data: { message: 'Invoice deleted successfully' }
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse({ message: 'Invoice deleted successfully' });
   } catch (error) {
     console.error('Error deleting invoice:', error);
-    
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'DELETE_ERROR',
-        message: 'Failed to delete invoice'
-      }
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'DELETE_ERROR',
+      'Failed to delete invoice',
+      500,
+      error
+    );
   }
 }

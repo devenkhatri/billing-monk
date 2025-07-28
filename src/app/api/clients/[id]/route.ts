@@ -2,69 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { clientFormSchema } from '@/lib/validations';
 import { ApiResponse, Client } from '@/types';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await context.params;
 
     if (!id) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Client ID is required',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse('VALIDATION_ERROR', 'Client ID is required', 400);
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const client = await sheetsService.getClient(id);
 
     if (!client) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Client not found',
-        },
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Client not found', 404);
     }
 
-    const response: ApiResponse<Client> = {
-      success: true,
-      data: client,
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse(client);
   } catch (error) {
     console.error('Error fetching client:', error);
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch client',
-        details: error,
-      },
-    };
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to fetch client',
+      500,
+      error
+    );
   }
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await context.params;
 
     if (!id) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Client ID is required',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse('VALIDATION_ERROR', 'Client ID is required', 400);
     }
 
     const body = await request.json();
@@ -72,15 +58,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     // Validate request body
     const result = clientFormSchema.safeParse(body);
     if (!result.success) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid client data',
-          details: result.error.issues,
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse(
+        'VALIDATION_ERROR',
+        'Invalid client data',
+        400,
+        result.error.issues
+      );
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
@@ -102,81 +85,50 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const updatedClient = await sheetsService.updateClient(id, updateData);
 
     if (!updatedClient) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Client not found',
-        },
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Client not found', 404);
     }
 
-    const response: ApiResponse<Client> = {
-      success: true,
-      data: updatedClient,
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse(updatedClient);
   } catch (error) {
     console.error('Error updating client:', error);
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to update client',
-        details: error,
-      },
-    };
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to update client',
+      500,
+      error
+    );
   }
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const { id } = await context.params;
 
     if (!id) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Client ID is required',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
+      return createErrorResponse('VALIDATION_ERROR', 'Client ID is required', 400);
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const success = await sheetsService.deleteClient(id);
 
     if (!success) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Client not found',
-        },
-      };
-      return NextResponse.json(response, { status: 404 });
+      return createErrorResponse('NOT_FOUND', 'Client not found', 404);
     }
 
-    const response: ApiResponse<{ id: string }> = {
-      success: true,
-      data: { id },
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse({ id });
   } catch (error) {
     console.error('Error deleting client:', error);
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to delete client',
-        details: error,
-      },
-    };
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'INTERNAL_ERROR',
+      'Failed to delete client',
+      500,
+      error
+    );
   }
 }

@@ -91,7 +91,7 @@
   - Add payment terms and default settings configuration
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [-] 14. Implement API routes for all data operations
+- [x] 14. Implement API routes for all data operations
   - Create API endpoints for client CRUD operations
   - Build invoice management API routes with validation
   - Implement payment tracking API endpoints

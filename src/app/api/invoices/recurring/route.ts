@@ -1,35 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { ApiResponse, Invoice } from '@/types';
+import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const service = await GoogleSheetsService.getAuthenticatedService();
     const recurringInvoices = await service.getRecurringInvoices();
 
-    const response: ApiResponse<Invoice[]> = {
-      success: true,
-      data: recurringInvoices
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse(recurringInvoices);
   } catch (error) {
     console.error('Error fetching recurring invoices:', error);
-    
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: 'Failed to fetch recurring invoices'
-      }
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'FETCH_ERROR',
+      'Failed to fetch recurring invoices',
+      500,
+      error
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) {
+      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    }
+
     const service = await GoogleSheetsService.getAuthenticatedService();
     
     // Get all recurring invoices that are due
@@ -44,29 +50,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const response: ApiResponse<{
-      generated: Invoice[];
-      count: number;
-    }> = {
-      success: true,
-      data: {
-        generated: generatedInvoices,
-        count: generatedInvoices.length
-      }
-    };
-
-    return NextResponse.json(response);
+    return createSuccessResponse({
+      generated: generatedInvoices,
+      count: generatedInvoices.length
+    });
   } catch (error) {
     console.error('Error generating recurring invoices:', error);
-    
-    const response: ApiResponse<never> = {
-      success: false,
-      error: {
-        code: 'GENERATION_ERROR',
-        message: 'Failed to generate recurring invoices'
-      }
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return createErrorResponse(
+      'GENERATION_ERROR',
+      'Failed to generate recurring invoices',
+      500,
+      error
+    );
   }
 }

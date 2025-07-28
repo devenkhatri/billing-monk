@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid invoice data',
-          details: validationResult.error.errors
+          details: validationResult.error.issues
         }
       };
       return NextResponse.json(response, { status: 400 });

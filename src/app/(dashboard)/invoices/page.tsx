@@ -96,6 +96,32 @@ export default function InvoicesPage() {
     setInvoices(prev => prev.map(i => i.id === updatedInvoice.id ? updatedInvoice : i));
   };
 
+  const handleDownloadPDF = async (invoice: Invoice) => {
+    try {
+      setError(null);
+
+      const response = await fetch(`/api/invoices/${invoice.id}/pdf`);
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error?.message || 'Failed to generate PDF');
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download PDF');
+    }
+  };
+
   const handleStatusChange = async (invoice: Invoice, newStatus: InvoiceStatus) => {
     try {
       const response = await fetch(`/api/invoices/${invoice.id}`, {
@@ -226,6 +252,7 @@ export default function InvoicesPage() {
       }, 5000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [error, success]);
 
   return (
@@ -263,6 +290,7 @@ export default function InvoicesPage() {
         onDelete={handleDeleteInvoice}
         onView={handleViewInvoice}
         onStatusChange={handleStatusChange}
+        onDownloadPDF={handleDownloadPDF}
         isLoading={isLoading}
       />
 

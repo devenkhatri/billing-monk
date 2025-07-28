@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { invoiceFormSchema } from '@/lib/validations';
-import { ApiResponse, Invoice, CreateInvoiceData, LineItem } from '@/types';
+import { ApiResponse, Invoice, UpdateInvoiceData, LineItem } from '@/types';
 import { generateId } from '@/lib/utils';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const invoice = await sheetsService.getInvoice(params.id);
+    const invoice = await sheetsService.getInvoice(id);
 
     if (!invoice) {
       const response: ApiResponse<never> = {
@@ -46,15 +47,16 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
     // Check if this is a status update or full form update
     const isStatusUpdate = body.status && Object.keys(body).length <= 3; // status, sentDate, and maybe one more field
 
-    let updateData: Partial<CreateInvoiceData>;
+    let updateData: UpdateInvoiceData;
 
     if (isStatusUpdate) {
       // Simple status update
@@ -71,7 +73,7 @@ export async function PUT(
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Invalid invoice data',
-            details: validationResult.error.errors
+            details: validationResult.error.issues
           }
         };
         return NextResponse.json(response, { status: 400 });
@@ -106,7 +108,7 @@ export async function PUT(
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const invoice = await sheetsService.updateInvoice(params.id, updateData);
+    const invoice = await sheetsService.updateInvoice(id, updateData);
 
     if (!invoice) {
       const response: ApiResponse<never> = {
@@ -142,11 +144,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deleteInvoice(params.id);
+    const success = await sheetsService.deleteInvoice(id);
 
     if (!success) {
       const response: ApiResponse<never> = {

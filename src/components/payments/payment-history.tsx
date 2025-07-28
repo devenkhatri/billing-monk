@@ -118,7 +118,7 @@ export function PaymentHistory({
       </div>
 
       {error && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="error" className="mb-4">
           {error}
         </Alert>
       )}

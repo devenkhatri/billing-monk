@@ -11,9 +11,9 @@ export async function GET(request: NextRequest) {
         name: 'Web Development Services',
         description: 'Standard web development template',
         lineItems: [
-          { description: 'Frontend Development', quantity: 40, rate: 75 },
-          { description: 'Backend Development', quantity: 30, rate: 85 },
-          { description: 'Testing & QA', quantity: 10, rate: 65 }
+          { description: 'Frontend Development', quantity: 40, rate: 75, amount: 3000 },
+          { description: 'Backend Development', quantity: 30, rate: 85, amount: 2550 },
+          { description: 'Testing & QA', quantity: 10, rate: 65, amount: 650 }
         ],
         taxRate: 8.5,
         notes: 'Payment due within 30 days',
@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
         name: 'Consulting Services',
         description: 'Standard consulting template',
         lineItems: [
-          { description: 'Strategy Consultation', quantity: 8, rate: 150 },
-          { description: 'Implementation Support', quantity: 16, rate: 125 }
+          { description: 'Strategy Consultation', quantity: 8, rate: 150, amount: 1200 },
+          { description: 'Implementation Support', quantity: 16, rate: 125, amount: 2000 }
         ],
         taxRate: 8.5,
         notes: 'Net 15 payment terms',
@@ -40,9 +40,9 @@ export async function GET(request: NextRequest) {
         name: 'Design Services',
         description: 'Standard design template',
         lineItems: [
-          { description: 'UI/UX Design', quantity: 20, rate: 95 },
-          { description: 'Graphic Design', quantity: 15, rate: 80 },
-          { description: 'Design Revisions', quantity: 5, rate: 70 }
+          { description: 'UI/UX Design', quantity: 20, rate: 95, amount: 1900 },
+          { description: 'Graphic Design', quantity: 15, rate: 80, amount: 1200 },
+          { description: 'Design Revisions', quantity: 5, rate: 70, amount: 350 }
         ],
         taxRate: 8.5,
         notes: 'Payment due upon completion',

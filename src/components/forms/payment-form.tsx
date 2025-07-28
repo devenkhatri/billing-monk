@@ -61,10 +61,11 @@ export function PaymentForm({ invoice, invoices = [], onSubmit, onCancel, isLoad
   const watchedInvoiceId = watch('invoiceId');
 
   // Update selected invoice when invoice ID changes
-  const handleInvoiceChange = (invoiceId: string) => {
-    const newSelectedInvoice = invoices.find(inv => inv.id === invoiceId);
+  const handleInvoiceChange = (invoiceId: string | number) => {
+    const invoiceIdStr = String(invoiceId);
+    const newSelectedInvoice = invoices.find(inv => inv.id === invoiceIdStr);
     setSelectedInvoice(newSelectedInvoice);
-    setValue('invoiceId', invoiceId);
+    setValue('invoiceId', invoiceIdStr);
     
     // Auto-fill amount with remaining balance
     if (newSelectedInvoice) {
@@ -91,7 +92,7 @@ export function PaymentForm({ invoice, invoices = [], onSubmit, onCancel, isLoad
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="error">
           {error}
         </Alert>
       )}
@@ -104,18 +105,19 @@ export function PaymentForm({ invoice, invoices = [], onSubmit, onCancel, isLoad
         >
           <Select
             value={watchedInvoiceId}
-            onValueChange={handleInvoiceChange}
+            onChange={handleInvoiceChange}
             disabled={isLoading}
-          >
-            <option value="">Select an invoice</option>
-            {invoices
-              .filter(inv => inv.balance > 0) // Only show invoices with outstanding balance
-              .map(inv => (
-                <option key={inv.id} value={inv.id}>
-                  {inv.invoiceNumber} - {inv.clientId} (Balance: ${inv.balance.toFixed(2)})
-                </option>
-              ))}
-          </Select>
+            placeholder="Select an invoice"
+            options={[
+              { value: '', label: 'Select an invoice' },
+              ...invoices
+                .filter(inv => inv.balance > 0) // Only show invoices with outstanding balance
+                .map(inv => ({
+                  value: inv.id,
+                  label: `${inv.invoiceNumber} - ${inv.clientId} (Balance: $${inv.balance.toFixed(2)})`
+                }))
+            ]}
+          />
         </FormField>
       )}
 
@@ -176,15 +178,11 @@ export function PaymentForm({ invoice, invoices = [], onSubmit, onCancel, isLoad
         required
       >
         <Select
-          {...register('paymentMethod')}
+          value={watch('paymentMethod')}
+          onChange={(value) => setValue('paymentMethod', value as PaymentMethod)}
           disabled={isLoading}
-        >
-          {paymentMethodOptions.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
+          options={paymentMethodOptions}
+        />
       </FormField>
 
       <FormField

@@ -3,11 +3,12 @@ import { GoogleSheetsService } from '@/lib/google-sheets';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const payment = await sheetsService.getPayment(params.id);
+    const payment = await sheetsService.getPayment(id);
 
     if (!payment) {
       return NextResponse.json(
@@ -43,11 +44,12 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deletePayment(params.id);
+    const success = await sheetsService.deletePayment(id);
 
     if (!success) {
       return NextResponse.json(

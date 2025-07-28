@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod } from '@/types';
 import { generateId } from './utils';
 
 export class GoogleSheetsService {
@@ -282,7 +282,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async updateInvoice(id: string, updates: Partial<CreateInvoiceData>): Promise<Invoice | null> {
+  async updateInvoice(id: string, updates: UpdateInvoiceData): Promise<Invoice | null> {
     try {
       // Get all invoices to find the row index
       const response = await this.sheets.spreadsheets.values.get({
@@ -711,7 +711,7 @@ export class GoogleSheetsService {
       invoiceId: row[1] || '',
       amount: parseFloat(row[2] || '0'),
       paymentDate: this.parseDate(row[3] || ''),
-      paymentMethod: (row[4] as any) || 'other',
+      paymentMethod: (row[4] as PaymentMethod) || 'other',
       notes: row[5] && row[5].trim() !== '' ? row[5] : undefined,
       createdAt: this.parseDate(row[6] || '')
     };
@@ -727,5 +727,114 @@ export class GoogleSheetsService {
       payment.notes || '',
       payment.createdAt.toISOString()
     ];
+  }
+
+  // Company Settings methods
+  async getCompanySettings(): Promise<CompanySettings | null> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Settings!A2:B'
+      });
+
+      const rows = response.data.values || [];
+      const settingsMap = new Map<string, string>();
+      
+      rows.forEach(row => {
+        if (row[0] && row[1]) {
+          settingsMap.set(row[0], row[1]);
+        }
+      });
+
+      if (settingsMap.size === 0) {
+        return this.getDefaultCompanySettings();
+      }
+
+      return {
+        name: settingsMap.get('company_name') || 'Your Company',
+        email: settingsMap.get('company_email') || '',
+        phone: settingsMap.get('company_phone') || undefined,
+        address: {
+          street: settingsMap.get('company_street') || '',
+          city: settingsMap.get('company_city') || '',
+          state: settingsMap.get('company_state') || '',
+          zipCode: settingsMap.get('company_zip') || '',
+          country: settingsMap.get('company_country') || ''
+        },
+        logo: settingsMap.get('company_logo') || undefined,
+        taxRate: parseFloat(settingsMap.get('tax_rate') || '0'),
+        paymentTerms: parseInt(settingsMap.get('payment_terms') || '30'),
+        invoiceTemplate: settingsMap.get('invoice_template') || 'default',
+        currency: settingsMap.get('currency') || 'USD',
+        dateFormat: settingsMap.get('date_format') || 'MM/dd/yyyy',
+        timeZone: settingsMap.get('time_zone') || 'America/New_York'
+      };
+    } catch (error) {
+      console.error('Error getting company settings:', error);
+      return this.getDefaultCompanySettings();
+    }
+  }
+
+  async updateCompanySettings(settings: CompanySettings): Promise<CompanySettings> {
+    try {
+      const settingsData = [
+        ['company_name', settings.name],
+        ['company_email', settings.email],
+        ['company_phone', settings.phone || ''],
+        ['company_street', settings.address.street],
+        ['company_city', settings.address.city],
+        ['company_state', settings.address.state],
+        ['company_zip', settings.address.zipCode],
+        ['company_country', settings.address.country],
+        ['company_logo', settings.logo || ''],
+        ['tax_rate', settings.taxRate.toString()],
+        ['payment_terms', settings.paymentTerms.toString()],
+        ['invoice_template', settings.invoiceTemplate],
+        ['currency', settings.currency],
+        ['date_format', settings.dateFormat],
+        ['time_zone', settings.timeZone]
+      ];
+
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Settings!A2:B'
+      });
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Settings!A2:B',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: settingsData
+        }
+      });
+
+      return settings;
+    } catch (error) {
+      console.error('Error updating company settings:', error);
+      throw error;
+    }
+  }
+
+  private getDefaultCompanySettings(): CompanySettings {
+    return {
+      name: 'Your Company',
+      email: '',
+      phone: undefined,
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: ''
+      },
+      logo: undefined,
+      taxRate: 0,
+      paymentTerms: 30,
+      invoiceTemplate: 'default',
+      currency: 'USD',
+      dateFormat: 'MM/dd/yyyy',
+      timeZone: 'America/New_York'
+    };
   }
 }

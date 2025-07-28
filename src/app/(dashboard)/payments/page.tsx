@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/modal';
 import { Alert } from '@/components/ui/alert';
 import { PaymentForm } from '@/components/forms/payment-form';
 import { PaymentTable } from '@/components/tables/payment-table';
-import { Loading } from '@/components/ui/loading';
+import { LoadingState } from '@/components/ui/loading';
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -123,7 +123,7 @@ export default function PaymentsPage() {
   };
 
   if (isLoading) {
-    return <Loading />;
+    return <LoadingState />;
   }
 
   // Filter invoices to only show those with outstanding balance for the form
@@ -144,7 +144,7 @@ export default function PaymentsPage() {
       </div>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="error">
           {error}
         </Alert>
       )}

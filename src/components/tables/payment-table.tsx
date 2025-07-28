@@ -87,6 +87,11 @@ export function PaymentTable({
     const aValue = a[sortConfig.key];
     const bValue = b[sortConfig.key];
     
+    // Handle undefined values
+    if (aValue === undefined && bValue === undefined) return 0;
+    if (aValue === undefined) return sortConfig.direction === 'asc' ? 1 : -1;
+    if (bValue === undefined) return sortConfig.direction === 'asc' ? -1 : 1;
+    
     if (aValue < bValue) {
       return sortConfig.direction === 'asc' ? -1 : 1;
     }
@@ -140,15 +145,15 @@ export function PaymentTable({
             </label>
             <Select
               value={filters.invoiceId || ''}
-              onValueChange={(value) => handleFilterChange('invoiceId', value)}
-            >
-              <option value="">All Invoices</option>
-              {invoices.map(invoice => (
-                <option key={invoice.id} value={invoice.id}>
-                  {invoice.invoiceNumber}
-                </option>
-              ))}
-            </Select>
+              onChange={(value) => handleFilterChange('invoiceId', String(value))}
+              options={[
+                { value: '', label: 'All Invoices' },
+                ...invoices.map(invoice => ({
+                  value: invoice.id,
+                  label: invoice.invoiceNumber
+                }))
+              ]}
+            />
           </div>
 
           <div>
@@ -157,15 +162,15 @@ export function PaymentTable({
             </label>
             <Select
               value={filters.paymentMethod || ''}
-              onValueChange={(value) => handleFilterChange('paymentMethod', value)}
-            >
-              <option value="">All Methods</option>
-              {Object.entries(paymentMethodLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
+              onChange={(value) => handleFilterChange('paymentMethod', String(value))}
+              options={[
+                { value: '', label: 'All Methods' },
+                ...Object.entries(paymentMethodLabels).map(([value, label]) => ({
+                  value,
+                  label
+                }))
+              ]}
+            />
           </div>
 
           <div>

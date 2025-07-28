@@ -13,7 +13,8 @@ import {
   MagnifyingGlassIcon,
   CheckCircleIcon,
   PaperAirplaneIcon,
-  XCircleIcon
+  XCircleIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 
 interface InvoiceTableProps {
@@ -23,6 +24,7 @@ interface InvoiceTableProps {
   onDelete: (invoice: Invoice) => void;
   onView: (invoice: Invoice) => void;
   onStatusChange?: (invoice: Invoice, status: InvoiceStatus) => void;
+  onDownloadPDF?: (invoice: Invoice) => void;
   isLoading?: boolean;
 }
 
@@ -41,6 +43,7 @@ export function InvoiceTable({
   onDelete, 
   onView,
   onStatusChange,
+  onDownloadPDF,
   isLoading = false 
 }: InvoiceTableProps) {
   const [filters, setFilters] = useState<Filters>({
@@ -376,6 +379,18 @@ export function InvoiceTable({
                         >
                           <EyeIcon className="h-4 w-4" />
                         </Button>
+                        
+                        {onDownloadPDF && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDownloadPDF(invoice)}
+                            className="text-purple-600 hover:text-purple-700"
+                            title="Download PDF"
+                          >
+                            <DocumentArrowDownIcon className="h-4 w-4" />
+                          </Button>
+                        )}
                         
                         {/* Status change buttons */}
                         {onStatusChange && (

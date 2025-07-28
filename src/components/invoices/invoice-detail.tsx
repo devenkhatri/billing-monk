@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Invoice, Client, Payment, PaymentFormData } from '@/types';
+import { useState } from 'react';
+import { Invoice, Client, PaymentFormData } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -19,7 +19,10 @@ interface InvoiceDetailProps {
 
 export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: InvoiceDetailProps) {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string>('');
   const [currentInvoice, setCurrentInvoice] = useState<Invoice>(invoice);
 
@@ -92,6 +95,68 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
     }
   };
 
+  const handleGeneratePDF = async () => {
+    try {
+      setIsGeneratingPDF(true);
+      setError('');
+
+      const response = await fetch(`/api/invoices/${currentInvoice.id}/pdf`);
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error?.message || 'Failed to generate PDF');
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${currentInvoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate PDF');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handlePreview = () => {
+    setShowPreview(true);
+  };
+
+  const handleSendInvoice = async () => {
+    try {
+      setIsSending(true);
+      setError('');
+
+      const response = await fetch(`/api/invoices/${currentInvoice.id}/send`, {
+        method: 'POST'
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error?.message || 'Failed to send invoice');
+      }
+
+      // Update the current invoice with the new status
+      setCurrentInvoice(result.data);
+      
+      // Notify parent component of the update
+      if (onInvoiceUpdate) {
+        onInvoiceUpdate(result.data);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send invoice');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const baseClasses = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium';
     
@@ -114,7 +179,7 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
   return (
     <div className="space-y-6">
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="error">
           {error}
         </Alert>
       )}
@@ -132,9 +197,33 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
               </span>
             </div>
           </div>
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={handlePreview}
+              disabled={isGeneratingPDF || isSending}
+            >
+              Preview
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleGeneratePDF}
+              disabled={isGeneratingPDF || isSending}
+            >
+              {isGeneratingPDF ? 'Generating...' : 'Download PDF'}
+            </Button>
+            {currentInvoice.status === 'draft' && (
+              <Button
+                onClick={handleSendInvoice}
+                disabled={isGeneratingPDF || isSending}
+              >
+                {isSending ? 'Sending...' : 'Send Invoice'}
+              </Button>
+            )}
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -259,6 +348,33 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
           onCancel={() => setShowPaymentForm(false)}
           isLoading={isSubmittingPayment}
         />
+      </Modal>
+
+      {/* Invoice Preview Modal */}
+      <Modal
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        title={`Invoice ${currentInvoice.invoiceNumber} Preview`}
+        size="xl"
+      >
+        <div className="h-96 overflow-auto">
+          <iframe
+            src={`/api/invoices/${currentInvoice.id}/preview`}
+            className="w-full h-full border-0"
+            title="Invoice Preview"
+          />
+        </div>
+        <div className="flex justify-end space-x-2 mt-4">
+          <Button variant="outline" onClick={() => setShowPreview(false)}>
+            Close
+          </Button>
+          <Button
+            onClick={handleGeneratePDF}
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? 'Generating...' : 'Download PDF'}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

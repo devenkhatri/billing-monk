@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, LineItem, InvoiceStatus } from '@/types';
 import { generateId } from './utils';
 
 export class GoogleSheetsService {
@@ -207,6 +207,366 @@ export class GoogleSheetsService {
       client.address.country,
       client.createdAt.toISOString(),
       client.updatedAt.toISOString()
+    ];
+  }
+
+  // Invoice methods
+  async getInvoices(): Promise<Invoice[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Invoices!A2:S'
+      });
+
+      const rows = response.data.values || [];
+      const invoices = await Promise.all(rows.map(row => this.rowToInvoice(row)));
+      return invoices;
+    } catch (error) {
+      console.error('Error getting invoices:', error);
+      return [];
+    }
+  }
+
+  async createInvoice(invoiceData: CreateInvoiceData): Promise<Invoice> {
+    const invoiceNumber = await this.generateInvoiceNumber();
+    const subtotal = invoiceData.lineItems.reduce((sum, item) => sum + item.amount, 0);
+    const taxAmount = subtotal * (invoiceData.taxRate / 100);
+    const total = subtotal + taxAmount;
+
+    const invoice: Invoice = {
+      id: this.generateId(),
+      invoiceNumber,
+      ...invoiceData,
+      subtotal,
+      taxAmount,
+      total,
+      paidAmount: 0,
+      balance: total,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Save invoice header
+    await this.sheets.spreadsheets.values.append({
+      spreadsheetId: this.spreadsheetId,
+      range: 'Invoices!A:S',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [this.invoiceToRow(invoice)]
+      }
+    });
+
+    // Save line items
+    if (invoice.lineItems.length > 0) {
+      const lineItemRows = invoice.lineItems.map(item => this.lineItemToRow(invoice.id, item));
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'LineItems!A:F',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: lineItemRows
+        }
+      });
+    }
+
+    return invoice;
+  }
+
+  async getInvoice(id: string): Promise<Invoice | null> {
+    try {
+      const invoices = await this.getInvoices();
+      return invoices.find(invoice => invoice.id === id) || null;
+    } catch (error) {
+      console.error('Error getting invoice:', error);
+      return null;
+    }
+  }
+
+  async updateInvoice(id: string, updates: Partial<CreateInvoiceData>): Promise<Invoice | null> {
+    try {
+      // Get all invoices to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Invoices!A2:S'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return null; // Invoice not found
+      }
+
+      // Get the existing invoice data
+      const existingRow = rows[rowIndex];
+      if (!existingRow) {
+        return null;
+      }
+      const existingInvoice = await this.rowToInvoice(existingRow);
+      
+      // Merge updates with existing data
+      const updatedInvoiceData = {
+        ...existingInvoice,
+        ...updates,
+        id, // Ensure ID doesn't change
+        updatedAt: new Date()
+      };
+
+      // Handle status-specific logic
+      if (updates.status === 'paid' && existingInvoice.status !== 'paid') {
+        // When marking as paid, set paidAmount to total and balance to 0
+        updatedInvoiceData.paidAmount = existingInvoice.total;
+        updatedInvoiceData.balance = 0;
+      }
+
+      // Recalculate amounts if line items changed
+      if (updates.lineItems) {
+        const subtotal = updates.lineItems.reduce((sum, item) => sum + item.amount, 0);
+        const taxAmount = subtotal * ((updates.taxRate ?? existingInvoice.taxRate) / 100);
+        const total = subtotal + taxAmount;
+        
+        updatedInvoiceData.subtotal = subtotal;
+        updatedInvoiceData.taxAmount = taxAmount;
+        updatedInvoiceData.total = total;
+        updatedInvoiceData.balance = total - updatedInvoiceData.paidAmount;
+      }
+
+      // Update the row in Google Sheets (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Invoices!A${sheetRowIndex}:S${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.invoiceToRow(updatedInvoiceData)]
+        }
+      });
+
+      // Update line items if they changed
+      if (updates.lineItems) {
+        // Delete existing line items
+        await this.deleteLineItems(id);
+        
+        // Add new line items
+        if (updates.lineItems.length > 0) {
+          const lineItemRows = updates.lineItems.map(item => this.lineItemToRow(id, item));
+          await this.sheets.spreadsheets.values.append({
+            spreadsheetId: this.spreadsheetId,
+            range: 'LineItems!A:F',
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: lineItemRows
+            }
+          });
+        }
+      }
+
+      return updatedInvoiceData;
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      return null;
+    }
+  }
+
+  async deleteInvoice(id: string): Promise<boolean> {
+    try {
+      // Delete line items first
+      await this.deleteLineItems(id);
+
+      // Get all invoices to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Invoices!A2:S'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false; // Invoice not found
+      }
+
+      // Delete the row (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 1, // Assuming Invoices sheet is the second sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1, // 0-based index
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      return false;
+    }
+  }
+
+  private async deleteLineItems(invoiceId: string): Promise<void> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'LineItems!A2:F'
+      });
+
+      const rows = response.data.values || [];
+      const rowsToDelete: number[] = [];
+
+      // Find all rows that belong to this invoice
+      rows.forEach((row, index) => {
+        if (row && row[1] === invoiceId) { // Column B contains invoiceId
+          rowsToDelete.push(index + 2); // +2 because we start from A2
+        }
+      });
+
+      // Delete rows in reverse order to maintain correct indices
+      for (const rowIndex of rowsToDelete.reverse()) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: 2, // Assuming LineItems sheet is the third sheet
+                  dimension: 'ROWS',
+                  startIndex: rowIndex - 1, // 0-based index
+                  endIndex: rowIndex
+                }
+              }
+            }]
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting line items:', error);
+    }
+  }
+
+  private async getLineItems(invoiceId: string): Promise<LineItem[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'LineItems!A2:F'
+      });
+
+      const rows = response.data.values || [];
+      return rows
+        .filter(row => row && row[1] === invoiceId) // Column B contains invoiceId
+        .map(row => this.rowToLineItem(row));
+    } catch (error) {
+      console.error('Error getting line items:', error);
+      return [];
+    }
+  }
+
+  private async generateInvoiceNumber(): Promise<string> {
+    try {
+      const invoices = await this.getInvoices();
+      const currentYear = new Date().getFullYear();
+      const yearPrefix = currentYear.toString();
+      
+      // Find the highest invoice number for the current year
+      const yearInvoices = invoices.filter(invoice => 
+        invoice.invoiceNumber.startsWith(yearPrefix)
+      );
+      
+      let maxNumber = 0;
+      yearInvoices.forEach(invoice => {
+        const numberPart = invoice.invoiceNumber.replace(`${yearPrefix}-`, '');
+        const num = parseInt(numberPart, 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      });
+      
+      const nextNumber = maxNumber + 1;
+      return `${yearPrefix}-${nextNumber.toString().padStart(4, '0')}`;
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      // Fallback to timestamp-based number
+      return `${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+    }
+  }
+
+  private async rowToInvoice(row: string[]): Promise<Invoice> {
+    const lineItems = await this.getLineItems(row[0] || '');
+    
+    return {
+      id: row[0] || '',
+      invoiceNumber: row[1] || '',
+      clientId: row[2] || '',
+      templateId: row[3] && row[3].trim() !== '' ? row[3] : undefined,
+      status: (row[4] as InvoiceStatus) || 'draft',
+      issueDate: this.parseDate(row[5] || ''),
+      dueDate: this.parseDate(row[6] || ''),
+      lineItems,
+      subtotal: parseFloat(row[7] || '0'),
+      taxRate: parseFloat(row[8] || '0'),
+      taxAmount: parseFloat(row[9] || '0'),
+      total: parseFloat(row[10] || '0'),
+      paidAmount: parseFloat(row[11] || '0'),
+      balance: parseFloat(row[12] || '0'),
+      notes: row[13] && row[13].trim() !== '' ? row[13] : undefined,
+      isRecurring: row[14] === 'true',
+      sentDate: row[15] && row[15].trim() !== '' ? this.parseDate(row[15]) : undefined,
+      createdAt: this.parseDate(row[16] || ''),
+      updatedAt: this.parseDate(row[17] || '')
+    };
+  }
+
+  private invoiceToRow(invoice: Invoice): string[] {
+    return [
+      invoice.id,
+      invoice.invoiceNumber,
+      invoice.clientId,
+      invoice.templateId || '',
+      invoice.status,
+      invoice.issueDate.toISOString(),
+      invoice.dueDate.toISOString(),
+      invoice.subtotal.toString(),
+      invoice.taxRate.toString(),
+      invoice.taxAmount.toString(),
+      invoice.total.toString(),
+      invoice.paidAmount.toString(),
+      invoice.balance.toString(),
+      invoice.notes || '',
+      invoice.isRecurring.toString(),
+      invoice.sentDate?.toISOString() || '',
+      invoice.createdAt.toISOString(),
+      invoice.updatedAt.toISOString()
+    ];
+  }
+
+  private rowToLineItem(row: string[]): LineItem {
+    const quantity = parseFloat(row[3] || '0');
+    const rate = parseFloat(row[4] || '0');
+    
+    return {
+      id: row[0] || '',
+      description: row[2] || '',
+      quantity,
+      rate,
+      amount: quantity * rate
+    };
+  }
+
+  private lineItemToRow(invoiceId: string, item: LineItem): string[] {
+    return [
+      item.id,
+      invoiceId,
+      item.description,
+      item.quantity.toString(),
+      item.rate.toString(),
+      item.amount.toString()
     ];
   }
 }

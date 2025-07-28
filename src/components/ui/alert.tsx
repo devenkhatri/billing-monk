@@ -14,6 +14,7 @@ interface AlertProps {
   children: ReactNode;
   dismissible?: boolean;
   onDismiss?: () => void;
+  onClose?: () => void;
   className?: string;
 }
 
@@ -23,8 +24,10 @@ const Alert = ({
   children,
   dismissible = false,
   onDismiss,
+  onClose,
   className
 }: AlertProps) => {
+  const handleClose = onClose || onDismiss;
   const variants = {
     success: {
       container: 'bg-green-50 border-green-200',
@@ -75,7 +78,7 @@ const Alert = ({
             {children}
           </div>
         </div>
-        {dismissible && onDismiss && (
+        {(dismissible || handleClose) && handleClose && (
           <div className="ml-auto pl-3">
             <div className="-mx-1.5 -my-1.5">
               <button
@@ -85,7 +88,7 @@ const Alert = ({
                   config.textColor,
                   'hover:bg-opacity-20 hover:bg-current'
                 )}
-                onClick={onDismiss}
+                onClick={handleClose}
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>

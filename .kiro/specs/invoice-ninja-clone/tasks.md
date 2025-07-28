@@ -42,7 +42,7 @@
   - Add client detail view with associated invoices
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 7. Develop invoice creation and management system
+- [x] 7. Develop invoice creation and management system
   - Build invoice creation form with client selection and line item management
   - Implement automatic calculations for subtotals, taxes, and totals
   - Create invoice list view with filtering and sorting capabilities

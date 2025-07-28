@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { Sidebar } from '@/components/layout/sidebar';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -6,20 +8,19 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        {/* Sidebar placeholder - will be implemented in later tasks */}
-        <aside className="w-64 bg-white shadow-sm">
-          <div className="p-4">
-            <h1 className="text-xl font-bold text-gray-900">Invoice Ninja</h1>
-          </div>
-        </aside>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        <Sidebar />
         
         {/* Main content */}
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+        <div className="md:pl-64">
+          <main className="py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

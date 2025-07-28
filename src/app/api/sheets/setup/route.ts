@@ -1,24 +1,21 @@
 import { NextRequest } from 'next/server'
 import { withAuth, createSuccessResponse, createErrorResponse } from '@/lib/middleware'
-import { GoogleSheetsService } from '@/lib/google-sheets'
+// import { GoogleSheetsService } from '@/lib/google-sheets'
 
 async function handler(_request: NextRequest) {
   try {
-    const service = await GoogleSheetsService.getAuthenticatedService()
-    
-    // Test connectivity and initialize sheets if needed
-    await service.initializeSheets()
-    
-    // Test basic operations
-    const clients = await service.getClients()
-    const settings = await service.getSettings()
+    // TODO: Implement Google Sheets service integration
+    // const service = await GoogleSheetsService.getAuthenticatedService()
+    // await service.initializeSheets()
+    // const clients = await service.getClients()
+    // const settings = await service.getSettings()
     
     return createSuccessResponse({
-      isConnected: true,
-      sheetsInitialized: true,
-      clientCount: clients.length,
-      hasSettings: Object.keys(settings).length > 0,
-      message: 'Google Sheets integration is working correctly'
+      isConnected: false,
+      sheetsInitialized: false,
+      clientCount: 0,
+      hasSettings: false,
+      message: 'Google Sheets integration not yet implemented'
     })
   } catch (error) {
     console.error('Google Sheets setup error:', error)

@@ -2,6 +2,75 @@
 
 import { ErrorCode, getUserFriendlyMessage } from './client-error-handler';
 
+// Data model interfaces
+interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  clientId: string;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  issueDate: string;
+  dueDate: string;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  paidAmount: number;
+  balance: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  description?: string;
+  lineItems: any[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CompanySettings {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+  };
+  taxRate?: number;
+  currency?: string;
+}
+
 // API response types
 interface ApiSuccessResponse<T> {
   success: true;
@@ -71,7 +140,7 @@ export class ApiClient {
     retryCount = 0
   ): Promise<T> {
     const fullUrl = url.startsWith('http') ? url : `${this.config.baseUrl}${url}`;
-    
+
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
@@ -108,10 +177,10 @@ export class ApiClient {
       // Retry if error is retryable and we haven't exceeded retry limit
       if (apiError.retryable && retryCount < this.config.retries) {
         console.warn(`API request failed (attempt ${retryCount + 1}/${this.config.retries + 1}), retrying:`, apiError.message);
-        
+
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, this.config.retryDelay * (retryCount + 1)));
-        
+
         return this.makeRequest<T>(url, options, retryCount + 1);
       }
 
@@ -145,9 +214,9 @@ export class ApiClient {
       // Retry network errors
       if (retryCount < this.config.retries) {
         console.warn(`Network error (attempt ${retryCount + 1}/${this.config.retries + 1}), retrying:`, error);
-        
+
         await new Promise(resolve => setTimeout(resolve, this.config.retryDelay * (retryCount + 1)));
-        
+
         return this.makeRequest<T>(url, options, retryCount + 1);
       }
 
@@ -161,7 +230,7 @@ export class ApiClient {
   async get<T>(url: string, params?: Record<string, string>): Promise<T> {
     const searchParams = params ? new URLSearchParams(params) : null;
     const fullUrl = searchParams ? `${url}?${searchParams}` : url;
-    
+
     return this.makeRequest<T>(fullUrl, { method: 'GET' });
   }
 
@@ -240,7 +309,7 @@ export function withApiErrorHandling<T extends unknown[], R>(
     } catch (error) {
       // Log error for debugging
       console.error('API call failed:', error);
-      
+
       // Re-throw with consistent error handling
       throw error;
     }
@@ -248,14 +317,14 @@ export function withApiErrorHandling<T extends unknown[], R>(
 }
 
 // Import caching utilities
-import { 
-  clientsCache, 
-  invoicesCache, 
-  paymentsCache, 
+import {
+  clientsCache,
+  invoicesCache,
+  paymentsCache,
   settingsCache,
   templatesCache,
-  cacheKeys, 
-  cacheInvalidation 
+  cacheKeys,
+  cacheInvalidation
 } from './cache';
 
 /**
@@ -301,17 +370,17 @@ class CachedApiClient {
   ): Promise<T> {
     // Store original data for rollback
     const originalData = cache.get(cacheKey);
-    
+
     // Apply optimistic update
     cache.set(cacheKey, optimisticData);
 
     try {
       // Perform actual update
       const result = await updater();
-      
+
       // Update cache with real result
       cache.set(cacheKey, result);
-      
+
       return result;
     } catch (error) {
       // Rollback on error
@@ -320,11 +389,11 @@ class CachedApiClient {
       } else {
         cache.delete(cacheKey);
       }
-      
+
       if (onError) {
         onError(error);
       }
-      
+
       throw error;
     }
   }
@@ -335,11 +404,11 @@ class CachedApiClient {
   async batchUpdate<T>(operations: Array<() => Promise<T>>): Promise<T[]> {
     // Execute all operations in parallel
     const results = await Promise.allSettled(operations.map(op => op()));
-    
+
     // Separate successful and failed operations
     const successful: T[] = [];
     const errors: any[] = [];
-    
+
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         successful.push(result.value);
@@ -347,12 +416,12 @@ class CachedApiClient {
         errors.push({ index, error: result.reason });
       }
     });
-    
+
     // If there are errors, log them but don't fail the entire batch
     if (errors.length > 0) {
       console.warn('Some batch operations failed:', errors);
     }
-    
+
     return successful;
   }
 }
@@ -362,50 +431,50 @@ const cachedApiClient = new CachedApiClient(apiClient);
 // Specific API functions with caching and optimistic updates
 export const clientsApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ? 
-      `${cacheKeys.clients.all()}:${JSON.stringify(params)}` : 
+    const cacheKey = params ?
+      `${cacheKeys.clients.all()}:${JSON.stringify(params)}` :
       cacheKeys.clients.all();
-    
+
     return cachedApiClient.getCached(
       cacheKey,
       clientsCache,
-      () => apiClient.get<{ clients: any[]; meta: any }>('/clients', params)
+      () => apiClient.get<{ clients: Client[]; meta: any }>('/clients', params)
     );
   },
-  
+
   getById: async (id: string) => {
     return cachedApiClient.getCached(
       cacheKeys.clients.byId(id),
       clientsCache,
-      () => apiClient.get<any>(`/clients/${id}`)
+      () => apiClient.get<Client>(`/clients/${id}`)
     );
   },
-  
-  create: async (data: any) => {
-    const result = await apiClient.post<any>('/clients', data);
-    
+
+  create: async (data: Partial<Client>) => {
+    const result = await apiClient.post<Client>('/clients', data);
+
     // Invalidate relevant caches
     cacheInvalidation.clients.invalidateAll();
-    
+
     return result;
   },
-  
-  update: async (id: string, data: any) => {
+
+  update: async (id: string, data: Partial<Client>) => {
     const optimisticData = { ...data, id };
-    
+
     return cachedApiClient.updateOptimistic(
       cacheKeys.clients.byId(id),
       clientsCache,
       optimisticData,
-      () => apiClient.put<any>(`/clients/${id}`, data),
+      () => apiClient.put<Client>(`/clients/${id}`, data),
       () => cacheInvalidation.clients.invalidateById(id)
     );
   },
-  
+
   delete: async (id: string) => {
     // Optimistically remove from cache
     clientsCache.delete(cacheKeys.clients.byId(id));
-    
+
     try {
       const result = await apiClient.delete<void>(`/clients/${id}`);
       cacheInvalidation.clients.invalidateAll();
@@ -417,7 +486,7 @@ export const clientsApi = {
     }
   },
 
-  batchUpdate: async (updates: Array<{ id: string; data: any }>) => {
+  batchUpdate: async (updates: Array<{ id: string; data: Partial<Client> }>) => {
     return cachedApiClient.batchUpdate(
       updates.map(({ id, data }) => () => clientsApi.update(id, data))
     );
@@ -426,17 +495,17 @@ export const clientsApi = {
 
 export const invoicesApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ? 
-      `${cacheKeys.invoices.all()}:${JSON.stringify(params)}` : 
+    const cacheKey = params ?
+      `${cacheKeys.invoices.all()}:${JSON.stringify(params)}` :
       cacheKeys.invoices.all();
-    
+
     return cachedApiClient.getCached(
       cacheKey,
       invoicesCache,
       () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices', params)
     );
   },
-  
+
   getById: async (id: string) => {
     return cachedApiClient.getCached(
       cacheKeys.invoices.byId(id),
@@ -444,7 +513,7 @@ export const invoicesApi = {
       () => apiClient.get<any>(`/invoices/${id}`)
     );
   },
-  
+
   getByClient: async (clientId: string) => {
     return cachedApiClient.getCached(
       cacheKeys.invoices.byClient(clientId),
@@ -452,7 +521,7 @@ export const invoicesApi = {
       () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices', { clientId })
     );
   },
-  
+
   getRecurring: async () => {
     return cachedApiClient.getCached(
       cacheKeys.invoices.recurring(),
@@ -460,22 +529,22 @@ export const invoicesApi = {
       () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices/recurring')
     );
   },
-  
+
   create: async (data: any) => {
     const result = await apiClient.post<any>('/invoices', data);
-    
+
     // Invalidate relevant caches
     cacheInvalidation.invoices.invalidateAll();
     if (data.clientId) {
       cacheInvalidation.invoices.invalidateByClient(data.clientId);
     }
-    
+
     return result;
   },
-  
+
   update: async (id: string, data: any) => {
     const optimisticData = { ...data, id };
-    
+
     return cachedApiClient.updateOptimistic(
       cacheKeys.invoices.byId(id),
       invoicesCache,
@@ -484,11 +553,11 @@ export const invoicesApi = {
       () => cacheInvalidation.invoices.invalidateById(id)
     );
   },
-  
+
   delete: async (id: string) => {
     // Optimistically remove from cache
     invoicesCache.delete(cacheKeys.invoices.byId(id));
-    
+
     try {
       const result = await apiClient.delete<void>(`/invoices/${id}`);
       cacheInvalidation.invoices.invalidateAll();
@@ -499,16 +568,16 @@ export const invoicesApi = {
       throw error;
     }
   },
-  
-  generatePdf: (id: string) => 
+
+  generatePdf: (id: string) =>
     apiClient.get<Blob>(`/invoices/${id}/pdf`),
-  
+
   send: async (id: string) => {
     const result = await apiClient.post<any>(`/invoices/${id}/send`);
-    
+
     // Invalidate invoice cache to reflect sent status
     cacheInvalidation.invoices.invalidateById(id);
-    
+
     return result;
   },
 
@@ -521,62 +590,62 @@ export const invoicesApi = {
 
 export const paymentsApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ? 
-      `${cacheKeys.payments.all()}:${JSON.stringify(params)}` : 
+    const cacheKey = params ?
+      `${cacheKeys.payments.all()}:${JSON.stringify(params)}` :
       cacheKeys.payments.all();
-    
+
     return cachedApiClient.getCached(
       cacheKey,
       paymentsCache,
-      () => apiClient.get<{ payments: any[]; meta: any }>('/payments', params)
+      () => apiClient.get<{ payments: Payment[]; meta: any }>('/payments', params)
     );
   },
-  
+
   getById: async (id: string) => {
     return cachedApiClient.getCached(
       cacheKeys.payments.byId(id),
       paymentsCache,
-      () => apiClient.get<any>(`/payments/${id}`)
+      () => apiClient.get<Payment>(`/payments/${id}`)
     );
   },
-  
+
   getByInvoice: async (invoiceId: string) => {
     return cachedApiClient.getCached(
       cacheKeys.payments.byInvoice(invoiceId),
       paymentsCache,
-      () => apiClient.get<{ payments: any[]; meta: any }>('/payments', { invoiceId })
+      () => apiClient.get<{ payments: Payment[]; meta: any }>('/payments', { invoiceId })
     );
   },
-  
-  create: async (data: any) => {
-    const result = await apiClient.post<any>('/payments', data);
-    
+
+  create: async (data: Partial<Payment>) => {
+    const result = await apiClient.post<Payment>('/payments', data);
+
     // Invalidate relevant caches
     cacheInvalidation.payments.invalidateAll();
     if (data.invoiceId) {
       cacheInvalidation.payments.invalidateByInvoice(data.invoiceId);
       cacheInvalidation.invoices.invalidateById(data.invoiceId);
     }
-    
+
     return result;
   },
-  
+
   delete: async (id: string) => {
     // Get payment data first to know which invoice to invalidate
-    const payment = paymentsCache.get(cacheKeys.payments.byId(id));
-    
+    const payment = paymentsCache.get(cacheKeys.payments.byId(id)) as Payment | undefined;
+
     // Optimistically remove from cache
     paymentsCache.delete(cacheKeys.payments.byId(id));
-    
+
     try {
       const result = await apiClient.delete<void>(`/payments/${id}`);
       cacheInvalidation.payments.invalidateAll();
-      
+
       // Invalidate related invoice cache
       if (payment?.invoiceId) {
         cacheInvalidation.invoices.invalidateById(payment.invoiceId);
       }
-      
+
       return result;
     } catch (error) {
       // On error, invalidate to force refresh
@@ -585,7 +654,7 @@ export const paymentsApi = {
     }
   },
 
-  batchCreate: async (payments: any[]) => {
+  batchCreate: async (payments: Partial<Payment>[]) => {
     return cachedApiClient.batchUpdate(
       payments.map(data => () => paymentsApi.create(data))
     );
@@ -601,13 +670,13 @@ export const settingsApi = {
       30 * 60 * 1000 // 30 minutes TTL for settings
     );
   },
-  
+
   updateCompany: async (data: any) => {
     const result = await apiClient.put<any>('/settings', data);
-    
+
     // Invalidate settings cache
     cacheInvalidation.settings.invalidateCompany();
-    
+
     return result;
   }
 };
@@ -620,7 +689,7 @@ export const templatesApi = {
       () => apiClient.get<{ templates: any[]; meta: any }>('/templates')
     );
   },
-  
+
   getById: async (id: string) => {
     return cachedApiClient.getCached(
       cacheKeys.templates.byId(id),
@@ -628,19 +697,19 @@ export const templatesApi = {
       () => apiClient.get<any>(`/templates/${id}`)
     );
   },
-  
+
   create: async (data: any) => {
     const result = await apiClient.post<any>('/templates', data);
-    
+
     // Invalidate templates cache
     cacheInvalidation.templates.invalidateAll();
-    
+
     return result;
   },
-  
+
   update: async (id: string, data: any) => {
     const optimisticData = { ...data, id };
-    
+
     return cachedApiClient.updateOptimistic(
       cacheKeys.templates.byId(id),
       templatesCache,
@@ -649,11 +718,11 @@ export const templatesApi = {
       () => cacheInvalidation.templates.invalidateById(id)
     );
   },
-  
+
   delete: async (id: string) => {
     // Optimistically remove from cache
     templatesCache.delete(cacheKeys.templates.byId(id));
-    
+
     try {
       const result = await apiClient.delete<void>(`/templates/${id}`);
       cacheInvalidation.templates.invalidateAll();

@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { clientFormSchema, clientFiltersSchema, paginationSchema } from '@/lib/validations';
 import { ApiResponse, Client, ClientFilters, PaginationParams } from '@/types';
-import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { createErrorResponse, createSuccessResponse, handleApiError, withErrorHandling } from '@/lib/error-handler';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
-  try {
+  return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+      throw new Error('Authentication required');
     }
 
     const { searchParams } = new URL(request.url);
@@ -35,15 +35,7 @@ export async function GET(request: NextRequest) {
     const paginationResult = paginationSchema.safeParse(pagination);
 
     if (!filtersResult.success || !paginationResult.success) {
-      return createErrorResponse(
-        'VALIDATION_ERROR',
-        'Invalid query parameters',
-        400,
-        {
-          filters: filtersResult.error?.issues,
-          pagination: paginationResult.error?.issues,
-        }
-      );
+      throw new Error('Invalid query parameters');
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
@@ -87,33 +79,24 @@ export async function GET(request: NextRequest) {
     const endIndex = startIndex + pagination.limit!;
     const paginatedClients = clients.slice(startIndex, endIndex);
 
-    return createSuccessResponse(
-      paginatedClients,
-      200,
-      {
+    return {
+      clients: paginatedClients,
+      meta: {
         total,
         page: pagination.page!,
         limit: pagination.limit!,
         hasMore: endIndex < total,
       }
-    );
-  } catch (error) {
-    console.error('Error fetching clients:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      'Failed to fetch clients',
-      500,
-      error
-    );
-  }
+    };
+  }, 'fetch clients');
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
+      throw new Error('Authentication required');
     }
 
     const body = await request.json();
@@ -121,12 +104,7 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const result = clientFormSchema.safeParse(body);
     if (!result.success) {
-      return createErrorResponse(
-        'VALIDATION_ERROR',
-        'Invalid client data',
-        400,
-        result.error.issues
-      );
+      throw result.error;
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
@@ -146,15 +124,6 @@ export async function POST(request: NextRequest) {
     };
 
     const client = await sheetsService.createClient(createData);
-
-    return createSuccessResponse(client, 201);
-  } catch (error) {
-    console.error('Error creating client:', error);
-    return createErrorResponse(
-      'INTERNAL_ERROR',
-      'Failed to create client',
-      500,
-      error
-    );
-  }
+    return client;
+  }, 'create client');
 }

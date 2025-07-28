@@ -1,128 +1,85 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Client, ApiResponse } from '@/types';
+import { Client } from '@/types';
 import { ClientFormData } from '@/lib/validations';
 import { Button } from '@/components/ui/button';
-import { LoadingState } from '@/components/ui/loading';
+import { AsyncLoadingState } from '@/components/ui/loading';
 import { Alert } from '@/components/ui/alert';
 import { ClientTable } from '@/components/tables/client-table';
 import { ClientForm } from '@/components/forms/client-form';
 import { ClientDetail } from '@/components/clients/client-detail';
+import { useAsyncOperation } from '@/lib/hooks/use-async-operation';
+import { useNotifications } from '@/lib/notification-context';
+import { clientsApi, handleApiError, isRetryableError } from '@/lib/api-client';
 
 type ViewMode = 'list' | 'create' | 'edit' | 'detail';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  
+  const { state: loadState, execute: loadClients, retry: retryLoad } = useAsyncOperation<{ clients: Client[]; meta: any }>();
+  const { state: deleteState, execute: executeDelete } = useAsyncOperation<void>();
+  const { addErrorNotification, addSuccessNotification } = useNotifications();
 
   useEffect(() => {
     fetchClients();
   }, []);
 
   const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await fetch('/api/clients');
-      const data: ApiResponse<Client[]> = await response.json();
-      
-      if (data.success) {
-        setClients(data.data);
-      } else {
-        setError(data.error.message);
+    const result = await loadClients(
+      () => clientsApi.getAll(),
+      {
+        errorMessage: 'Failed to load clients',
+        showErrorNotification: false // We'll handle this in the UI
       }
-    } catch (err) {
-      setError('Failed to load clients');
-    } finally {
-      setIsLoading(false);
+    );
+
+    if (result) {
+      setClients(result.clients);
     }
   };
 
-  const handleCreateClient = async (formData: ClientFormData) => {
-    try {
-      setIsSubmitting(true);
-      
-      const response = await fetch('/api/clients', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      const data: ApiResponse<Client> = await response.json();
-      
-      if (data.success) {
-        setClients(prev => [...prev, data.data]);
-        setViewMode('list');
-        setSelectedClient(null);
-      } else {
-        throw new Error(data.error.message);
-      }
-    } catch (err) {
-      throw err; // Re-throw to be handled by the form
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleCreateClient = async (formData: ClientFormData): Promise<Client> => {
+    const client = await clientsApi.create(formData);
+    setClients(prev => [...prev, client]);
+    setViewMode('list');
+    setSelectedClient(null);
+    return client;
   };
 
-  const handleUpdateClient = async (formData: ClientFormData) => {
-    if (!selectedClient) return;
+  const handleUpdateClient = async (formData: ClientFormData): Promise<Client> => {
+    if (!selectedClient) throw new Error('No client selected');
     
-    try {
-      setIsSubmitting(true);
-      
-      const response = await fetch(`/api/clients/${selectedClient.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      const data: ApiResponse<Client> = await response.json();
-      
-      if (data.success) {
-        setClients(prev => prev.map(client => 
-          client.id === selectedClient.id ? data.data : client
-        ));
-        setViewMode('detail');
-        setSelectedClient(data.data);
-      } else {
-        throw new Error(data.error.message);
-      }
-    } catch (err) {
-      throw err; // Re-throw to be handled by the form
-    } finally {
-      setIsSubmitting(false);
-    }
+    const updatedClient = await clientsApi.update(selectedClient.id, formData);
+    setClients(prev => prev.map(client => 
+      client.id === selectedClient.id ? updatedClient : client
+    ));
+    setViewMode('detail');
+    setSelectedClient(updatedClient);
+    return updatedClient;
   };
 
   const handleDeleteClient = async (client: Client) => {
-    try {
-      const response = await fetch(`/api/clients/${client.id}`, {
-        method: 'DELETE',
-      });
-      
-      const data: ApiResponse<{ id: string }> = await response.json();
-      
-      if (data.success) {
-        setClients(prev => prev.filter(c => c.id !== client.id));
-        if (selectedClient?.id === client.id) {
-          setSelectedClient(null);
-          setViewMode('list');
-        }
-      } else {
-        setError(data.error.message);
+    const confirmed = window.confirm(`Are you sure you want to delete ${client.name}? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    const result = await executeDelete(
+      () => clientsApi.delete(client.id),
+      {
+        successMessage: `${client.name} has been deleted successfully`,
+        errorMessage: `Failed to delete ${client.name}`
       }
-    } catch (err) {
-      setError('Failed to delete client');
+    );
+
+    if (result !== null) { // Success (void return)
+      setClients(prev => prev.filter(c => c.id !== client.id));
+      if (selectedClient?.id === client.id) {
+        setSelectedClient(null);
+        setViewMode('list');
+      }
     }
   };
 
@@ -155,12 +112,6 @@ export default function ClientsPage() {
     setViewMode('list');
   };
 
-  if (isLoading) {
-    return (
-      <LoadingState />
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -178,22 +129,23 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="error" dismissible onDismiss={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
       {/* Content based on view mode */}
       {viewMode === 'list' && (
-        <ClientTable
-          clients={clients}
-          onEdit={handleEditClient}
-          onDelete={handleDeleteClient}
-          onView={handleViewClient}
-          isLoading={isLoading}
-        />
+        <AsyncLoadingState
+          loading={loadState.loading}
+          error={loadState.error}
+          onRetry={retryLoad}
+          loadingMessage="Loading clients..."
+          errorTitle="Failed to load clients"
+        >
+          <ClientTable
+            clients={clients}
+            onEdit={handleEditClient}
+            onDelete={handleDeleteClient}
+            onView={handleViewClient}
+            isLoading={deleteState.loading}
+          />
+        </AsyncLoadingState>
       )}
 
       {viewMode === 'create' && (
@@ -205,7 +157,6 @@ export default function ClientsPage() {
           <ClientForm
             onSubmit={handleCreateClient}
             onCancel={handleCancel}
-            isLoading={isSubmitting}
           />
         </div>
       )}
@@ -220,7 +171,6 @@ export default function ClientsPage() {
             client={selectedClient}
             onSubmit={handleUpdateClient}
             onCancel={handleCancel}
-            isLoading={isSubmitting}
           />
         </div>
       )}

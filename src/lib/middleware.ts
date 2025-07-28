@@ -93,34 +93,5 @@ export function getUserFromRequest(request: NextRequest) {
   }
 }
 
-// Error response helper
-export function createErrorResponse(
-  code: string, 
-  message: string, 
-  status: number = 400,
-  details?: unknown
-) {
-  return NextResponse.json(
-    { 
-      success: false, 
-      error: { code, message, details } 
-    },
-    { status }
-  )
-}
-
-// Success response helper
-export function createSuccessResponse<T>(
-  data: T, 
-  status: number = 200,
-  meta?: Record<string, unknown>
-) {
-  return NextResponse.json(
-    { 
-      success: true, 
-      data,
-      ...(meta && { meta })
-    },
-    { status }
-  )
-}
+// Re-export error handling functions from error-handler
+export { createErrorResponse, createSuccessResponse, handleApiError } from './error-handler';

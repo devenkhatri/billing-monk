@@ -4,35 +4,168 @@ import { authOptions } from './auth';
 import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData } from '@/types';
 import { generateId } from './utils';
 
+// Error types for better error handling
+export class GoogleSheetsError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode?: number,
+    public retryable: boolean = false
+  ) {
+    super(message);
+    this.name = 'GoogleSheetsError';
+  }
+}
+
+export class AuthenticationError extends GoogleSheetsError {
+  constructor(message: string = 'Authentication failed') {
+    super(message, 'AUTHENTICATION_ERROR', 401, false);
+  }
+}
+
+export class RateLimitError extends GoogleSheetsError {
+  constructor(message: string = 'Rate limit exceeded') {
+    super(message, 'RATE_LIMIT_ERROR', 429, true);
+  }
+}
+
+export class NetworkError extends GoogleSheetsError {
+  constructor(message: string = 'Network error occurred') {
+    super(message, 'NETWORK_ERROR', 500, true);
+  }
+}
+
+export class ValidationError extends GoogleSheetsError {
+  constructor(message: string = 'Data validation failed') {
+    super(message, 'VALIDATION_ERROR', 400, false);
+  }
+}
+
+// Retry configuration
+interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  backoffMultiplier: number;
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelay: 1000, // 1 second
+  maxDelay: 10000, // 10 seconds
+  backoffMultiplier: 2
+};
+
 export class GoogleSheetsService {
   private sheets: sheets_v4.Sheets;
   private spreadsheetId: string;
+  private retryConfig: RetryConfig;
 
-  constructor(accessToken: string, spreadsheetId: string) {
+  constructor(accessToken: string, spreadsheetId: string, retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG) {
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: accessToken });
 
     this.sheets = google.sheets({ version: 'v4', auth });
     this.spreadsheetId = spreadsheetId;
+    this.retryConfig = retryConfig;
+  }
+
+  /**
+   * Executes a Google Sheets operation with retry logic and error handling
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    retryable: boolean = true
+  ): Promise<T> {
+    let lastError: Error;
+    let attempt = 0;
+
+    while (attempt <= this.retryConfig.maxRetries) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        attempt++;
+
+        // Parse Google Sheets API errors
+        const parsedError = this.parseGoogleSheetsError(error, operationName);
+        
+        // Don't retry if error is not retryable or we've exceeded max retries
+        if (!retryable || !parsedError.retryable || attempt > this.retryConfig.maxRetries) {
+          throw parsedError;
+        }
+
+        // Calculate delay with exponential backoff
+        const delay = Math.min(
+          this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt - 1),
+          this.retryConfig.maxDelay
+        );
+
+        console.warn(`${operationName} failed (attempt ${attempt}/${this.retryConfig.maxRetries + 1}), retrying in ${delay}ms:`, parsedError.message);
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    // This should never be reached, but just in case
+    throw this.parseGoogleSheetsError(lastError!, operationName);
+  }
+
+  /**
+   * Parses Google Sheets API errors into our custom error types
+   */
+  private parseGoogleSheetsError(error: any, operationName: string): GoogleSheetsError {
+    const message = error?.message || 'Unknown error occurred';
+    const statusCode = error?.response?.status || error?.status;
+
+    // Authentication errors
+    if (statusCode === 401 || message.includes('unauthorized') || message.includes('invalid_grant')) {
+      return new AuthenticationError(`Authentication failed during ${operationName}: ${message}`);
+    }
+
+    // Rate limiting errors
+    if (statusCode === 429 || message.includes('rate limit') || message.includes('quota exceeded')) {
+      return new RateLimitError(`Rate limit exceeded during ${operationName}: ${message}`);
+    }
+
+    // Network/connectivity errors
+    if (statusCode >= 500 || message.includes('network') || message.includes('timeout') || error.code === 'ENOTFOUND') {
+      return new NetworkError(`Network error during ${operationName}: ${message}`);
+    }
+
+    // Validation errors
+    if (statusCode === 400 || message.includes('invalid') || message.includes('bad request')) {
+      return new ValidationError(`Validation error during ${operationName}: ${message}`);
+    }
+
+    // Generic error with retry capability for unknown errors
+    return new GoogleSheetsError(
+      `Error during ${operationName}: ${message}`,
+      'UNKNOWN_ERROR',
+      statusCode,
+      statusCode >= 500 // Retry server errors
+    );
   }
 
   static async getAuthenticatedService(): Promise<GoogleSheetsService> {
     const session = await getServerSession(authOptions);
 
     if (!session?.accessToken) {
-      throw new Error('No valid session or access token found');
+      throw new AuthenticationError('No valid session or access token found');
     }
 
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
     if (!spreadsheetId) {
-      throw new Error('Google Sheets Spreadsheet ID not configured');
+      throw new ValidationError('Google Sheets Spreadsheet ID not configured');
     }
 
     return new GoogleSheetsService(session.accessToken, spreadsheetId);
   }
 
   async getClients(): Promise<Client[]> {
-    try {
+    return this.executeWithRetry(async () => {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Clients!A2:K'
@@ -40,44 +173,40 @@ export class GoogleSheetsService {
 
       const rows = response.data.values || [];
       return rows.map(row => this.rowToClient(row));
-    } catch (error) {
-      console.error('Error getting clients:', error);
-      return [];
-    }
+    }, 'getClients');
   }
 
   async createClient(clientData: CreateClientData): Promise<Client> {
-    const client: Client = {
-      id: this.generateId(),
-      ...clientData,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+    return this.executeWithRetry(async () => {
+      const client: Client = {
+        id: this.generateId(),
+        ...clientData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
 
-    await this.sheets.spreadsheets.values.append({
-      spreadsheetId: this.spreadsheetId,
-      range: 'Clients!A:K',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [this.clientToRow(client)]
-      }
-    });
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Clients!A:K',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.clientToRow(client)]
+        }
+      });
 
-    return client;
+      return client;
+    }, 'createClient');
   }
 
   async getClient(id: string): Promise<Client | null> {
-    try {
+    return this.executeWithRetry(async () => {
       const clients = await this.getClients();
       return clients.find(client => client.id === id) || null;
-    } catch (error) {
-      console.error('Error getting client:', error);
-      return null;
-    }
+    }, 'getClient');
   }
 
   async updateClient(id: string, updates: Partial<CreateClientData>): Promise<Client | null> {
-    try {
+    return this.executeWithRetry(async () => {
       // Get all clients to find the row index
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -88,13 +217,13 @@ export class GoogleSheetsService {
       const rowIndex = rows.findIndex(row => row && row[0] === id);
 
       if (rowIndex === -1) {
-        return null; // Client not found
+        throw new ValidationError(`Client with ID ${id} not found`);
       }
 
       // Get the existing client data
       const existingRow = rows[rowIndex];
       if (!existingRow) {
-        return null;
+        throw new ValidationError(`Client data is corrupted for ID ${id}`);
       }
       const existingClient = this.rowToClient(existingRow);
       
@@ -118,10 +247,7 @@ export class GoogleSheetsService {
       });
 
       return updatedClient;
-    } catch (error) {
-      console.error('Error updating client:', error);
-      return null;
-    }
+    }, 'updateClient');
   }
 
   async deleteClient(id: string): Promise<boolean> {

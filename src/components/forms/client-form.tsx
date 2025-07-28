@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { clientFormSchema, ClientFormData } from '@/lib/validations';
@@ -9,16 +8,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/forms/form-field';
 import { Alert } from '@/components/ui/alert';
+import { Spinner } from '@/components/ui/loading';
+import { useFormSubmission } from '@/lib/hooks/use-async-operation';
+import { useNotifications } from '@/lib/notification-context';
 
 interface ClientFormProps {
   client?: Client;
-  onSubmit: (data: ClientFormData) => Promise<void>;
+  onSubmit: (data: ClientFormData) => Promise<Client>;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
 export function ClientForm({ client, onSubmit, onCancel, isLoading = false }: ClientFormProps) {
-  const [error, setError] = useState<string | null>(null);
+  const { state, submit } = useFormSubmission<Client>();
+  const { addErrorNotification } = useNotifications();
 
   const {
     register,
@@ -48,19 +51,27 @@ export function ClientForm({ client, onSubmit, onCancel, isLoading = false }: Cl
   });
 
   const handleFormSubmit = async (data: ClientFormData) => {
-    try {
-      setError(null);
-      await onSubmit(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    const result = await submit(
+      () => onSubmit(data),
+      {
+        successMessage: client ? 'Client updated successfully' : 'Client created successfully',
+        errorMessage: client ? 'Failed to update client' : 'Failed to create client'
+      }
+    );
+
+    // If successful and this is a create operation, you might want to reset the form
+    if (result && !client) {
+      // Form will be closed by parent component typically
     }
   };
 
+  const isSubmitting = state.loading || isLoading;
+
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      {error && (
-        <Alert variant="error">
-          {error}
+      {state.error && (
+        <Alert variant="error" dismissible onDismiss={() => {}}>
+          {state.error}
         </Alert>
       )}
 
@@ -176,9 +187,16 @@ export function ClientForm({ client, onSubmit, onCancel, isLoading = false }: Cl
         </Button>
         <Button
           type="submit"
-          disabled={isSubmitting || isLoading}
+          disabled={isSubmitting}
         >
-          {isSubmitting || isLoading ? 'Saving...' : client ? 'Update Client' : 'Create Client'}
+          {isSubmitting ? (
+            <div className="flex items-center">
+              <Spinner size="sm" className="mr-2" />
+              Saving...
+            </div>
+          ) : (
+            client ? 'Update Client' : 'Create Client'
+          )}
         </Button>
       </div>
     </form>

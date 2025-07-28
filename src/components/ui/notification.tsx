@@ -10,6 +10,13 @@ export interface NotificationProps {
   message?: string;
   duration?: number;
   onClose: (id: string) => void;
+  actions?: NotificationAction[];
+}
+
+export interface NotificationAction {
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary';
 }
 
 export function Notification({ 
@@ -18,7 +25,8 @@ export function Notification({
   title, 
   message, 
   duration = 5000, 
-  onClose 
+  onClose,
+  actions = []
 }: NotificationProps) {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -113,6 +121,32 @@ export function Notification({
               <p className={`mt-1 text-sm ${getMessageColor()}`}>
                 {message}
               </p>
+            )}
+            {actions.length > 0 && (
+              <div className="mt-3 flex space-x-2">
+                {actions.map((action, index) => (
+                  <button
+                    key={index}
+                    onClick={action.onClick}
+                    className={`
+                      text-xs font-medium px-2 py-1 rounded
+                      ${action.variant === 'primary' 
+                        ? `${type === 'success' ? 'bg-green-600 text-white hover:bg-green-700' : ''}
+                           ${type === 'error' ? 'bg-red-600 text-white hover:bg-red-700' : ''}
+                           ${type === 'warning' ? 'bg-yellow-600 text-white hover:bg-yellow-700' : ''}
+                           ${type === 'info' ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}`
+                        : `${type === 'success' ? 'text-green-800 hover:bg-green-100' : ''}
+                           ${type === 'error' ? 'text-red-800 hover:bg-red-100' : ''}
+                           ${type === 'warning' ? 'text-yellow-800 hover:bg-yellow-100' : ''}
+                           ${type === 'info' ? 'text-blue-800 hover:bg-blue-100' : ''}`
+                      }
+                      transition-colors duration-200
+                    `}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
           <div className="ml-4 flex-shrink-0 flex">

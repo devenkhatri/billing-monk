@@ -84,14 +84,14 @@
   - Add CSV and PDF export functionality for reports
   - _Requirements: 5.2, 5.3, 5.4_
 
-- [ ] 13. Build company settings and configuration management
+- [x] 13. Build company settings and configuration management
   - Create company profile settings form with logo upload
   - Implement tax rate configuration and management
   - Build invoice template customization interface
   - Add payment terms and default settings configuration
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 14. Implement API routes for all data operations
+- [-] 14. Implement API routes for all data operations
   - Create API endpoints for client CRUD operations
   - Build invoice management API routes with validation
   - Implement payment tracking API endpoints

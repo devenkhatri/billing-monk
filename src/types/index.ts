@@ -273,6 +273,7 @@ export interface CompanySettingsFormData {
   state: string;
   zipCode: string;
   country: string;
+  logo?: string;
   taxRate: number;
   paymentTerms: number;
   invoiceTemplate: string;

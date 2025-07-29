@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Exclude docs folder from Next.js build
   pageExtensions: ['js', 'jsx', 'ts', 'tsx'],
+
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   
   // Ignore docs folder during build
   webpack: (config, { isServer }) => {

@@ -17,6 +17,7 @@ import {
   DocumentDuplicateIcon,
   FolderIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon, shortcut: 'Alt+I' },
   { name: 'Templates', href: '/templates', icon: DocumentDuplicateIcon, shortcut: 'Alt+T' },
   { name: 'Payments', href: '/payments', icon: CreditCardIcon, shortcut: 'Alt+P' },
+  { name: 'Activity Logs', href: '/activity-logs', icon: ClipboardDocumentListIcon, shortcut: 'Alt+A' },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, shortcut: 'Alt+R' },
   { name: 'Settings', href: '/settings', icon: CogIcon, shortcut: 'Alt+S' },
 ];

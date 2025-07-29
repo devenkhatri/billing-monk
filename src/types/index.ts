@@ -438,6 +438,39 @@ export interface ActivityItem {
   amount?: number;
 }
 
+// Activity Log interface for comprehensive logging
+export interface ActivityLog {
+  id: string;
+  type: ActivityItem['type'];
+  description: string;
+  entityType: ActivityItem['entityType'];
+  entityId?: string;
+  entityName?: string;
+  userId?: string;
+  userEmail?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  amount?: number;
+  previousValue?: string; // JSON string of previous state
+  newValue?: string; // JSON string of new state
+  metadata?: Record<string, any>; // Additional context data
+  timestamp: Date;
+}
+
+// Activity log creation data
+export type CreateActivityLogData = Omit<ActivityLog, 'id' | 'timestamp'>;
+
+// Activity log filters
+export interface ActivityLogFilters {
+  type?: ActivityItem['type'];
+  entityType?: ActivityItem['entityType'];
+  entityId?: string;
+  userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+}
+
 // Report types
 export interface RevenueReport {
   period: string;

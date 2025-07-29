@@ -9,6 +9,9 @@ A comprehensive billing and invoice management system built specifically for Ind
 - **Invoice Templates**: Create and manage reusable invoice templates with predefined line items
 - **Payment Tracking**: Monitor payments and outstanding balances in INR
 - **Recurring Billing**: Automate regular billing cycles
+- **Project & Task Management**: Organize work with projects and tasks
+- **Time Tracking**: Log time entries for accurate billing
+- **Activity Logging**: Comprehensive audit trail of all system activities
 - **Business Analytics**: Generate insights with comprehensive reports
 - **Google Sheets Integration**: All data stored securely in your own Google Sheets
 - **Mobile Responsive**: Works seamlessly on all devices

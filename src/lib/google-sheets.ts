@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData, Project, CreateProjectData, UpdateProjectData, Task, CreateTaskData, UpdateTaskData, TimeEntry, CreateTimeEntryData, UpdateTimeEntryData, ProjectStatus, TaskStatus, TaskPriority } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData, Project, CreateProjectData, UpdateProjectData, Task, CreateTaskData, UpdateTaskData, TimeEntry, CreateTimeEntryData, UpdateTimeEntryData, ProjectStatus, TaskStatus, TaskPriority, ActivityLog, CreateActivityLogData, ActivityLogFilters } from '@/types';
 import { generateId } from './utils';
 
 // Error types for better error handling
@@ -2328,6 +2328,10 @@ export class GoogleSheetsService {
         {
           name: 'TimeEntries',
           headers: ['ID', 'TaskID', 'ProjectID', 'Description', 'StartTime', 'EndTime', 'Duration', 'IsBillable', 'HourlyRate', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'ActivityLogs',
+          headers: ['ID', 'Type', 'Description', 'EntityType', 'EntityID', 'EntityName', 'UserID', 'UserEmail', 'IPAddress', 'UserAgent', 'Amount', 'PreviousValue', 'NewValue', 'Metadata', 'Timestamp']
         }
       ];
 
@@ -2699,5 +2703,131 @@ export class GoogleSheetsService {
       console.error('Error ensuring task and project sheets:', error);
       throw error;
     }
+  }
+
+  // Activity Logging methods
+  async getActivityLogs(filters?: ActivityLogFilters, pagination?: { page: number; limit: number }): Promise<{ logs: ActivityLog[]; total: number; page: number; limit: number; hasMore: boolean }> {
+    return this.executeWithRetry(async () => {
+      await this.ensureInitialized();
+      
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'ActivityLogs!A2:O'
+      });
+
+      const rows = response.data.values || [];
+      let logs = rows.map(row => this.rowToActivityLog(row));
+
+      // Apply filters
+      if (filters) {
+        if (filters.type) {
+          logs = logs.filter(log => log.type === filters.type);
+        }
+        if (filters.entityType) {
+          logs = logs.filter(log => log.entityType === filters.entityType);
+        }
+        if (filters.entityId) {
+          logs = logs.filter(log => log.entityId === filters.entityId);
+        }
+        if (filters.userId) {
+          logs = logs.filter(log => log.userId === filters.userId);
+        }
+        if (filters.dateFrom) {
+          const fromDate = new Date(filters.dateFrom);
+          logs = logs.filter(log => log.timestamp >= fromDate);
+        }
+        if (filters.dateTo) {
+          const toDate = new Date(filters.dateTo);
+          logs = logs.filter(log => log.timestamp <= toDate);
+        }
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          logs = logs.filter(log => 
+            log.description.toLowerCase().includes(searchLower) ||
+            log.entityName?.toLowerCase().includes(searchLower) ||
+            log.userEmail?.toLowerCase().includes(searchLower)
+          );
+        }
+      }
+
+      // Sort by timestamp (newest first)
+      logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      // Apply pagination
+      const page = pagination?.page || 1;
+      const limit = pagination?.limit || 50;
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedLogs = logs.slice(startIndex, endIndex);
+
+      return {
+        logs: paginatedLogs,
+        total: logs.length,
+        page,
+        limit,
+        hasMore: endIndex < logs.length
+      };
+    }, 'getActivityLogs');
+  }
+
+  async createActivityLog(logData: CreateActivityLogData): Promise<ActivityLog> {
+    return this.executeWithRetry(async () => {
+      const log: ActivityLog = {
+        id: this.generateId(),
+        ...logData,
+        timestamp: new Date()
+      };
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'ActivityLogs!A:O',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.activityLogToRow(log)]
+        }
+      });
+
+      return log;
+    }, 'createActivityLog');
+  }
+
+  private rowToActivityLog(row: string[]): ActivityLog {
+    return {
+      id: row[0] || '',
+      type: (row[1] as ActivityLog['type']) || 'settings_updated',
+      description: row[2] || '',
+      entityType: (row[3] as ActivityLog['entityType']) || undefined,
+      entityId: row[4] && row[4].trim() !== '' ? row[4] : undefined,
+      entityName: row[5] && row[5].trim() !== '' ? row[5] : undefined,
+      userId: row[6] && row[6].trim() !== '' ? row[6] : undefined,
+      userEmail: row[7] && row[7].trim() !== '' ? row[7] : undefined,
+      ipAddress: row[8] && row[8].trim() !== '' ? row[8] : undefined,
+      userAgent: row[9] && row[9].trim() !== '' ? row[9] : undefined,
+      amount: row[10] && row[10].trim() !== '' ? parseFloat(row[10]) : undefined,
+      previousValue: row[11] && row[11].trim() !== '' ? row[11] : undefined,
+      newValue: row[12] && row[12].trim() !== '' ? row[12] : undefined,
+      metadata: row[13] && row[13].trim() !== '' ? JSON.parse(row[13]) : undefined,
+      timestamp: this.parseDate(row[14] || '')
+    };
+  }
+
+  private activityLogToRow(log: ActivityLog): string[] {
+    return [
+      log.id,
+      log.type,
+      log.description,
+      log.entityType || '',
+      log.entityId || '',
+      log.entityName || '',
+      log.userId || '',
+      log.userEmail || '',
+      log.ipAddress || '',
+      log.userAgent || '',
+      log.amount?.toString() || '',
+      log.previousValue || '',
+      log.newValue || '',
+      log.metadata ? JSON.stringify(log.metadata) : '',
+      log.timestamp.toISOString()
+    ];
   }
 }

@@ -51,6 +51,12 @@ const shortcuts: KeyboardShortcut[] = [
     description: 'Go to Settings'
   },
   {
+    key: 'a',
+    altKey: true,
+    action: () => window.location.href = '/activity-logs',
+    description: 'Go to Activity Logs'
+  },
+  {
     key: 'n',
     ctrlKey: true,
     action: () => {

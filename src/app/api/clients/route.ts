@@ -5,6 +5,7 @@ import { ApiResponse, Client, ClientFilters, PaginationParams } from '@/types';
 import { createErrorResponse, createSuccessResponse, handleApiError, withErrorHandling } from '@/lib/error-handler';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { activityLogger } from '@/lib/activity-logger';
 
 export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
@@ -124,6 +125,18 @@ export async function POST(request: NextRequest) {
     };
 
     const client = await sheetsService.createClient(createData);
+    
+    // Log the activity
+    await activityLogger.logClientActivity(
+      'client_added',
+      client.id,
+      client.name,
+      session.user?.id,
+      session.user?.email || undefined,
+      undefined,
+      client
+    );
+    
     return client;
   }, 'create client');
 }

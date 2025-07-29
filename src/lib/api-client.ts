@@ -448,3 +448,29 @@ export const templatesApi = {
     return cachedApiClient.deleteWithInvalidation<void>(`/templates/${id}`, 'templates');
   }
 };
+
+export const activityLogsApi = {
+  getAll: async (filters?: any, pagination?: any) => {
+    const params = new URLSearchParams();
+    
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
+
+    if (pagination) {
+      if (pagination.page) params.append('page', String(pagination.page));
+      if (pagination.limit) params.append('limit', String(pagination.limit));
+    }
+
+    const url = `/activity-logs${params.toString() ? `?${params.toString()}` : ''}`;
+    return cachedApiClient.getCached<{ logs: any[]; total: number; page: number; limit: number; hasMore: boolean }>(url, undefined, 1 * 60 * 1000); // 1 minute cache for activity logs
+  },
+
+  create: async (data: any) => {
+    return apiClient.post<any>('/activity-logs', data);
+  }
+};

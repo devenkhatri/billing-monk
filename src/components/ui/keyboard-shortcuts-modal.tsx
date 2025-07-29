@@ -46,6 +46,11 @@ const shortcuts: KeyboardShortcut[] = [
     description: 'Go to Settings'
   },
   {
+    key: 'a',
+    altKey: true,
+    description: 'Go to Activity Logs'
+  },
+  {
     key: 'n',
     ctrlKey: true,
     description: 'Create New (context-aware)'

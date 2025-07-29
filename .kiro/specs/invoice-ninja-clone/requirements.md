@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document outlines the requirements for creating a working clone of Invoice Ninja, a comprehensive invoice management system. The application will provide core invoicing functionality including client management, invoice creation, payment tracking, and reporting. The system will use Google Sheets as the backend data store and Next.js for the frontend implementation, focusing on essential features without testing functionality.
+This document outlines the requirements for creating Billing Monk, a comprehensive invoice management system designed specifically for Indian businesses. The application will provide core invoicing functionality including client management, GST-compliant invoice creation, payment tracking, and reporting. The system will use Google Sheets as the backend data store and Next.js for the frontend implementation, focusing on essential features without testing functionality.
 
 ## Requirements
 
@@ -22,17 +22,22 @@ This document outlines the requirements for creating a working clone of Invoice 
 
 ### Requirement 2
 
-**User Story:** As a business owner, I want to manage the invoice templates
+**User Story:** As a business owner, I want to create and manage invoice templates so that I can quickly generate invoices for recurring services or products.
 
 #### Acceptance Criteria
 
-1. WHEN I access the template management section THEN the system SHALL display a list of all templates
-2. WHEN I click "Add Template" THEN the system SHALL present a form to enter template details (name, content)
-3. WHEN I submit valid template information THEN the system SHALL save the template to Google Sheets and display success confirmation
-4. WHEN I click on an existing template THEN the system SHALL allow me to edit their information
-5. WHEN I delete a template THEN the system SHALL remove them from Google Sheets and update the display
-6. WHEN I filter templates by name THEN the system SHALL display only templates matching the search criteria
-7. WHEN I view the dashboard THEN the system SHALL show total templates, active templates, and recent activity
+1. WHEN I access the template management section THEN the system SHALL display a list of all templates with their status, total amounts, and creation dates
+2. WHEN I click "Create Template" THEN the system SHALL present a form to enter template details (name, description, line items, tax rate, notes, active status)
+3. WHEN I add line items to a template THEN the system SHALL allow multiple items with description, quantity, and rate fields
+4. WHEN I modify template line items THEN the system SHALL calculate and display real-time subtotal, tax amount, and total
+5. WHEN I submit valid template information THEN the system SHALL save the template to Google Sheets and display success confirmation
+6. WHEN I click on an existing template THEN the system SHALL allow me to edit all template information including line items
+7. WHEN I delete a template THEN the system SHALL remove it from Google Sheets and update the display
+8. WHEN I mark a template as inactive THEN the system SHALL hide it from the invoice creation dropdown
+9. WHEN I create an invoice THEN the system SHALL show active templates in a dropdown for selection
+10. WHEN I select a template during invoice creation THEN the system SHALL auto-populate line items, tax rate, and notes
+11. WHEN I apply a template to an invoice THEN the system SHALL allow me to modify the populated data before saving
+12. WHEN I use the "Apply Template" button THEN the system SHALL reapply the selected template data to the current invoice
 
 
 ### Requirement 3
@@ -42,8 +47,8 @@ This document outlines the requirements for creating a working clone of Invoice 
 #### Acceptance Criteria
 
 1. WHEN I click "Create Invoice" THEN the system SHALL present a form to enter invoice details (client, date, line items)
-2. WHEN I select the Template THEN the system SHALL populate the line items automatically
-2. WHEN I select a client THEN the system SHALL populate their information automatically
+2. WHEN I select a template THEN the system SHALL populate the line items, tax rate, and notes automatically
+3. WHEN I select a client THEN the system SHALL populate their information automatically
 3. WHEN I add line items THEN the system SHALL calculate subtotals, taxes, and total amounts automatically
 4. WHEN I save an invoice THEN the system SHALL store it in Google Sheets with a unique invoice number
 5. WHEN I view the invoice list THEN the system SHALL display all invoices with status, client, amount, and date

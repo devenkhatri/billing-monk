@@ -71,6 +71,53 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Creates a GoogleSheetsService instance using service account credentials
+   * This is used for server-side operations that don't require user authentication
+   */
+  static async getAuthenticatedService(retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG): Promise<GoogleSheetsService> {
+    try {
+      // Get required environment variables
+      const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+      const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
+      const projectId = process.env.GOOGLE_SHEETS_PROJECT_ID;
+      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+
+      if (!privateKey || !clientEmail || !projectId || !spreadsheetId) {
+        throw new AuthenticationError(
+          'Missing required Google Sheets service account credentials. Please check your environment variables.'
+        );
+      }
+
+      // Create service account auth
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          type: 'service_account',
+          project_id: projectId,
+          private_key: privateKey.replace(/\\n/g, '\n'),
+          client_email: clientEmail,
+        },
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+
+      const authClient = await auth.getClient();
+      const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+      // Create a new instance with service account auth
+      const service = Object.create(GoogleSheetsService.prototype);
+      service.sheets = sheets;
+      service.spreadsheetId = spreadsheetId;
+      service.retryConfig = retryConfig;
+
+      return service;
+    } catch (error) {
+      console.error('Failed to create authenticated Google Sheets service:', error);
+      throw new AuthenticationError(
+        `Failed to authenticate with Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
    * Executes a Google Sheets operation with retry logic and error handling
    */
   private async executeWithRetry<T>(
@@ -149,7 +196,7 @@ export class GoogleSheetsService {
     );
   }
 
-  static async getAuthenticatedService(): Promise<GoogleSheetsService> {
+  static async getAuthenticatedServiceWithUserToken(): Promise<GoogleSheetsService> {
     const session = await getServerSession(authOptions);
 
     if (!session?.accessToken) {
@@ -1005,12 +1052,12 @@ export class GoogleSheetsService {
         country: ''
       },
       logo: undefined,
-      taxRate: 0,
+      taxRate: 18,
       paymentTerms: 30,
       invoiceTemplate: 'default',
-      currency: 'USD',
-      dateFormat: 'MM/dd/yyyy',
-      timeZone: 'America/New_York'
+      currency: 'INR',
+      dateFormat: 'dd/MM/yyyy',
+      timeZone: 'Asia/Kolkata'
     };
   }
 
@@ -1148,9 +1195,12 @@ export class GoogleSheetsService {
   // Template methods
   async getTemplates(): Promise<Template[]> {
     try {
+      // Ensure template sheets exist before reading
+      await this.ensureTemplateSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Templates!A2:I'
+        range: 'Templates!A2:H'
       });
 
       const rows = response.data.values || [];
@@ -1163,37 +1213,48 @@ export class GoogleSheetsService {
   }
 
   async createTemplate(templateData: CreateTemplateData): Promise<Template> {
-    const template: Template = {
-      id: this.generateId(),
-      ...templateData,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+    return this.executeWithRetry(async () => {
+      // Ensure template sheets exist before creating template
+      await this.ensureTemplateSheets();
+      
+      const template: Template = {
+        id: this.generateId(),
+        ...templateData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
 
-    // Save template header
-    await this.sheets.spreadsheets.values.append({
-      spreadsheetId: this.spreadsheetId,
-      range: 'Templates!A:I',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [this.templateToRow(template)]
-      }
-    });
-
-    // Save template line items
-    if (template.lineItems.length > 0) {
-      const lineItemRows = template.lineItems.map(item => this.templateLineItemToRow(template.id, item));
+      // Save template header
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: 'TemplateLineItems!A:F',
+        range: 'Templates!A:H',
         valueInputOption: 'RAW',
         requestBody: {
-          values: lineItemRows
+          values: [this.templateToRow(template)]
         }
       });
-    }
 
-    return template;
+      // Save template line items
+      if (template.lineItems.length > 0) {
+        console.log('Saving template line items:', template.lineItems);
+        const lineItemRows = template.lineItems.map(item => this.templateLineItemToRow(template.id, item));
+        console.log('Line item rows to save:', lineItemRows);
+        
+        await this.sheets.spreadsheets.values.append({
+          spreadsheetId: this.spreadsheetId,
+          range: 'TemplateLineItems!A:F',
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: lineItemRows
+          }
+        });
+        console.log('Template line items saved successfully');
+      } else {
+        console.log('No line items to save for template');
+      }
+
+      return template;
+    }, 'createTemplate');
   }
 
   async getTemplate(id: string): Promise<Template | null> {
@@ -1208,10 +1269,13 @@ export class GoogleSheetsService {
 
   async updateTemplate(id: string, updates: UpdateTemplateData): Promise<Template | null> {
     try {
+      // Ensure template sheets exist before updating
+      await this.ensureTemplateSheets();
+      
       // Get all templates to find the row index
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Templates!A2:I'
+        range: 'Templates!A2:H'
       });
 
       const rows = response.data.values || [];
@@ -1240,7 +1304,7 @@ export class GoogleSheetsService {
       const sheetRowIndex = rowIndex + 2;
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `Templates!A${sheetRowIndex}:I${sheetRowIndex}`,
+        range: `Templates!A${sheetRowIndex}:H${sheetRowIndex}`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [this.templateToRow(updatedTemplate)]
@@ -1275,13 +1339,16 @@ export class GoogleSheetsService {
 
   async deleteTemplate(id: string): Promise<boolean> {
     try {
+      // Ensure template sheets exist before deleting
+      await this.ensureTemplateSheets();
+      
       // Delete template line items first
       await this.deleteTemplateLineItems(id);
 
       // Get all templates to find the row index
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Templates!A2:I'
+        range: 'Templates!A2:H'
       });
 
       const rows = response.data.values || [];
@@ -1415,13 +1482,267 @@ export class GoogleSheetsService {
   }
 
   private templateLineItemToRow(templateId: string, item: Omit<LineItem, 'id'>): string[] {
+    // Calculate amount if not provided (for template line items from forms)
+    const amount = item.amount ?? (item.quantity * item.rate);
+    
     return [
       this.generateId(),
       templateId,
       item.description,
       item.quantity.toString(),
       item.rate.toString(),
-      item.amount.toString()
+      amount.toString()
     ];
+  }
+
+  /**
+   * Ensure template sheets exist and have correct headers
+   */
+  private async ensureTemplateSheets(): Promise<void> {
+    try {
+      // Get current spreadsheet info
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+
+      const existingSheets = spreadsheetInfo.data.sheets?.map(sheet => sheet.properties?.title) || [];
+      
+      // Define template sheets
+      const templateSheets = [
+        {
+          name: 'Templates',
+          headers: ['ID', 'Name', 'Description', 'TaxRate', 'Notes', 'IsActive', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'TemplateLineItems',
+          headers: ['ID', 'TemplateID', 'Description', 'Quantity', 'Rate', 'Amount']
+        }
+      ];
+
+      // Create missing template sheets
+      const sheetsToCreate = templateSheets.filter(sheet => !existingSheets.includes(sheet.name));
+      
+      if (sheetsToCreate.length > 0) {
+        const requests = sheetsToCreate.map(sheet => ({
+          addSheet: {
+            properties: {
+              title: sheet.name
+            }
+          }
+        }));
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests
+          }
+        });
+
+        console.log(`Created template sheets: ${sheetsToCreate.map(s => s.name).join(', ')}`);
+      }
+
+      // Add headers to template sheets
+      for (const sheet of templateSheets) {
+        try {
+          // Check if headers already exist
+          const existingData = await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.spreadsheetId,
+            range: `${sheet.name}!A1:Z1`
+          });
+
+          // If no data or headers don't match, add/update headers
+          if (!existingData.data.values || existingData.data.values.length === 0 || 
+              !this.arraysEqual(existingData.data.values[0], sheet.headers)) {
+            
+            await this.sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
+              valueInputOption: 'RAW',
+              requestBody: {
+                values: [sheet.headers]
+              }
+            });
+
+            console.log(`Updated headers for ${sheet.name} sheet`);
+          }
+        } catch (error) {
+          console.error(`Error setting up ${sheet.name} sheet:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring template sheets:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize the Google Sheets structure with all required sheets and headers
+   */
+  async initializeSheets(): Promise<void> {
+    try {
+      // Get current spreadsheet info
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+
+      const existingSheets = spreadsheetInfo.data.sheets?.map(sheet => sheet.properties?.title) || [];
+      
+      // Define required sheets with their headers
+      const requiredSheets = [
+        {
+          name: 'Clients',
+          headers: ['ID', 'Name', 'Email', 'Phone', 'Street', 'City', 'State', 'ZipCode', 'Country', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'Invoices',
+          headers: ['ID', 'InvoiceNumber', 'ClientID', 'TemplateID', 'Status', 'IssueDate', 'DueDate', 'Subtotal', 'TaxRate', 'TaxAmount', 'Total', 'PaidAmount', 'Balance', 'Notes', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'LineItems',
+          headers: ['ID', 'InvoiceID', 'Description', 'Quantity', 'Rate', 'Amount']
+        },
+        {
+          name: 'Payments',
+          headers: ['ID', 'InvoiceID', 'Amount', 'PaymentDate', 'PaymentMethod', 'Notes', 'CreatedAt']
+        },
+        {
+          name: 'Settings',
+          headers: ['Key', 'Value', 'UpdatedAt']
+        },
+        {
+          name: 'Templates',
+          headers: ['ID', 'Name', 'Description', 'TaxRate', 'Notes', 'IsActive', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'TemplateLineItems',
+          headers: ['ID', 'TemplateID', 'Description', 'Quantity', 'Rate', 'Amount']
+        }
+      ];
+
+      // Create missing sheets
+      const sheetsToCreate = requiredSheets.filter(sheet => !existingSheets.includes(sheet.name));
+      
+      if (sheetsToCreate.length > 0) {
+        const requests = sheetsToCreate.map(sheet => ({
+          addSheet: {
+            properties: {
+              title: sheet.name
+            }
+          }
+        }));
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests
+          }
+        });
+
+        console.log(`Created sheets: ${sheetsToCreate.map(s => s.name).join(', ')}`);
+      }
+
+      // Add headers to all sheets
+      for (const sheet of requiredSheets) {
+        try {
+          // Check if headers already exist
+          const existingData = await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.spreadsheetId,
+            range: `${sheet.name}!A1:Z1`
+          });
+
+          // If no data or headers don't match, add/update headers
+          if (!existingData.data.values || existingData.data.values.length === 0 || 
+              !this.arraysEqual(existingData.data.values[0], sheet.headers)) {
+            
+            await this.sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
+              valueInputOption: 'RAW',
+              requestBody: {
+                values: [sheet.headers]
+              }
+            });
+
+            console.log(`Updated headers for sheet: ${sheet.name}`);
+          }
+        } catch (error) {
+          console.warn(`Could not update headers for sheet ${sheet.name}:`, error);
+        }
+      }
+
+      // Add some default settings if Settings sheet is empty
+      try {
+        const settingsData = await this.sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: 'Settings!A2:B'
+        });
+
+        if (!settingsData.data.values || settingsData.data.values.length === 0) {
+          const defaultSettings = [
+            ['company_name', 'Your Company Name'],
+            ['company_email', 'contact@yourcompany.com'],
+            ['tax_rate', '0.10'],
+            ['currency', 'USD'],
+            ['invoice_prefix', 'INV'],
+            ['payment_terms', '30']
+          ];
+
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: 'Settings!A2:B7',
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: defaultSettings
+            }
+          });
+
+          console.log('Added default settings');
+        }
+      } catch (error) {
+        console.warn('Could not add default settings:', error);
+      }
+
+    } catch (error) {
+      console.error('Failed to initialize sheets:', error);
+      throw new GoogleSheetsError(
+        `Failed to initialize Google Sheets structure: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'SHEET_INITIALIZATION_ERROR',
+        500,
+        false
+      );
+    }
+  }
+
+  /**
+   * Helper method to compare two arrays for equality
+   */
+  private arraysEqual(a: any[], b: any[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((val, index) => val === b[index]);
+  }
+
+  /**
+   * Helper method to convert column number to letter (1 = A, 2 = B, etc.)
+   */
+  private getColumnLetter(columnNumber: number): string {
+    let result = '';
+    while (columnNumber > 0) {
+      columnNumber--;
+      result = String.fromCharCode(65 + (columnNumber % 26)) + result;
+      columnNumber = Math.floor(columnNumber / 26);
+    }
+    return result;
+  }
+
+  /**
+   * Get basic spreadsheet information including sheet names
+   */
+  async getSpreadsheetInfo(): Promise<any> {
+    return this.executeWithRetry(async () => {
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+      return response.data;
+    }, 'getSpreadsheetInfo');
   }
 }

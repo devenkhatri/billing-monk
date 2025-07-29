@@ -1,18 +1,20 @@
-# Invoice Ninja Clone
+# Billing Monk
 
-A comprehensive invoice management system built with Next.js and Google Sheets as the backend. This application provides all the essential features needed for managing clients, creating professional invoices, tracking payments, and generating business reports.
+A comprehensive billing and invoice management system built specifically for Indian businesses. Built with Next.js and Google Sheets as the backend, Billing Monk provides all the essential features needed for managing clients, creating GST-compliant invoices, tracking payments, and generating business reports.
 
 ## Features
 
 - **Client Management**: Store and organize customer information
-- **Professional Invoicing**: Create beautiful, customizable invoices
-- **Payment Tracking**: Monitor payments and outstanding balances
+- **GST-Compliant Invoicing**: Create beautiful, GST-compliant invoices for Indian businesses
+- **Invoice Templates**: Create and manage reusable invoice templates with predefined line items
+- **Payment Tracking**: Monitor payments and outstanding balances in INR
 - **Recurring Billing**: Automate regular billing cycles
 - **Business Analytics**: Generate insights with comprehensive reports
-- **Google Sheets Integration**: All data stored in your own Google Sheets
+- **Google Sheets Integration**: All data stored securely in your own Google Sheets
 - **Mobile Responsive**: Works seamlessly on all devices
-- **PDF Generation**: Create professional PDF invoices
-- **Template System**: Reusable invoice templates for efficiency
+- **PDF Generation**: Create professional PDF invoices with GST details
+- **Template Management**: Full CRUD operations for invoice templates
+- **Indian Localization**: Built specifically for Indian business practices and compliance
 
 ## Quick Start
 
@@ -57,7 +59,7 @@ Before installing the application, set up Google Cloud Console:
 **Create Google Cloud Project:**
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click "New Project" or select existing project
-3. Enter project name (e.g., "Invoice Ninja Clone")
+3. Enter project name (e.g., "Billing Monk")
 4. Note the Project ID for later use
 
 **Enable Required APIs:**
@@ -88,8 +90,8 @@ Before installing the application, set up Google Cloud Console:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/invoice-ninja-clone.git
-cd invoice-ninja-clone
+git clone https://github.com/your-org/billing-monk.git
+cd billing-monk
 
 # Install dependencies
 npm install
@@ -110,7 +112,7 @@ npm run dev
 # docker-compose.yml
 version: '3.8'
 services:
-  invoice-ninja-clone:
+  billing-monk:
     build: .
     ports:
       - "3000:3000"
@@ -155,8 +157,8 @@ GOOGLE_SHEETS_PROJECT_ID=your-google-cloud-project-id
 
 ```bash
 # Application Settings
-DEFAULT_CURRENCY=USD
-DEFAULT_TAX_RATE=0.10
+DEFAULT_CURRENCY=INR
+DEFAULT_TAX_RATE=0.18
 COMPANY_NAME=Your Company Name
 INVOICE_NUMBER_PREFIX=INV
 
@@ -190,8 +192,8 @@ GOOGLE_SPREADSHEET_ID=your-spreadsheet-id-here
 | `GOOGLE_SHEETS_PRIVATE_KEY` | Yes | Service account private key | From JSON key file |
 | `GOOGLE_SHEETS_CLIENT_EMAIL` | Yes | Service account email | `service-account@project.iam.gserviceaccount.com` |
 | `GOOGLE_SHEETS_PROJECT_ID` | Yes | Google Cloud project ID | `invoice-ninja-clone-123456` |
-| `DEFAULT_CURRENCY` | No | Default currency code | `USD`, `EUR`, `GBP` |
-| `DEFAULT_TAX_RATE` | No | Default tax rate (decimal) | `0.08` (8%) |
+| `DEFAULT_CURRENCY` | No | Default currency code | `INR`, `USD`, `EUR` |
+| `DEFAULT_TAX_RATE` | No | Default GST rate (decimal) | `0.18` (18%) |
 | `COMPANY_NAME` | No | Default company name | `Acme Corporation` |
 | `INVOICE_NUMBER_PREFIX` | No | Invoice number prefix | `INV`, `ACME` |
 
@@ -209,15 +211,16 @@ If you prefer manual setup:
 1. **Create Google Spreadsheet:**
    - Go to [Google Sheets](https://sheets.google.com)
    - Create a new spreadsheet
-   - Name it "Invoice Ninja Clone Data"
+   - Name it "Billing Monk Data"
 
 2. **Create Required Sheets:**
    - `Clients`: ID, Name, Email, Phone, Street, City, State, ZipCode, Country, CreatedAt, UpdatedAt
-   - `Invoices`: ID, InvoiceNumber, ClientID, Status, IssueDate, DueDate, Subtotal, TaxRate, TaxAmount, Total, PaidAmount, Balance, Notes, CreatedAt, UpdatedAt
+   - `Invoices`: ID, InvoiceNumber, ClientID, TemplateID, Status, IssueDate, DueDate, Subtotal, TaxRate, TaxAmount, Total, PaidAmount, Balance, Notes, CreatedAt, UpdatedAt
    - `LineItems`: ID, InvoiceID, Description, Quantity, Rate, Amount
    - `Payments`: ID, InvoiceID, Amount, PaymentDate, PaymentMethod, Notes, CreatedAt
    - `Settings`: Key, Value, UpdatedAt
-   - `Templates`: ID, Name, Description, LineItems, CreatedAt, UpdatedAt
+   - `Templates`: ID, Name, Description, TaxRate, Notes, IsActive, CreatedAt, UpdatedAt
+   - `TemplateLineItems`: ID, TemplateID, Description, Quantity, Rate
 
 3. **Configure Permissions:**
    - Share spreadsheet with service account email
@@ -243,7 +246,7 @@ npm start
 npm install -g pm2
 
 # Start application
-pm2 start npm --name "invoice-ninja-clone" -- start
+pm2 start npm --name "billing-monk" -- start
 
 # Save PM2 configuration
 pm2 save
@@ -356,7 +359,7 @@ cp ~/.pm2/dump.pm2 ~/pm2-backup.$(date +%Y%m%d).json
 **Application Code Backup:**
 ```bash
 # Create application backup
-tar -czf invoice-ninja-backup-$(date +%Y%m%d).tar.gz \
+tar -czf billing-monk-backup-$(date +%Y%m%d).tar.gz \
   --exclude=node_modules \
   --exclude=.next \
   --exclude=.git \
@@ -427,7 +430,7 @@ tar -czf invoice-ninja-backup-$(date +%Y%m%d).tar.gz \
 
 ```bash
 # Backup current installation
-cp -r . ../invoice-ninja-backup-$(date +%Y%m%d)
+cp -r . ../billing-monk-backup-$(date +%Y%m%d)
 
 # Pull latest changes
 git pull origin main
@@ -475,10 +478,10 @@ npm run lint         # Run linting
 npm run test         # Run tests
 
 # Production Management
-pm2 start npm --name "invoice-ninja-clone" -- start
-pm2 stop invoice-ninja-clone
-pm2 restart invoice-ninja-clone
-pm2 logs invoice-ninja-clone
+pm2 start npm --name "billing-monk" -- start
+pm2 stop billing-monk
+pm2 restart billing-monk
+pm2 logs billing-monk
 pm2 monit
 
 # System Monitoring
@@ -501,7 +504,7 @@ GOOGLE_CLIENT_SECRET=dev-client-secret
 **Production Environment:**
 ```bash
 NODE_ENV=production
-NEXTAUTH_URL=https://invoice.yourcompany.com
+NEXTAUTH_URL=https://billing.yourcompany.com
 NEXTAUTH_SECRET=super-secure-production-secret
 GOOGLE_CLIENT_ID=prod-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=prod-client-secret
@@ -509,9 +512,83 @@ CACHE_TTL=600
 SESSION_MAX_AGE=86400
 ```
 
+## Key Features Guide
+
+### Invoice Templates
+
+The application now includes a comprehensive template management system that allows you to create reusable invoice templates for common services or products.
+
+#### Creating Templates
+
+1. **Navigate to Templates**: Click "Templates" in the sidebar or press `Alt+T`
+2. **Create New Template**: Click the "Create Template" button
+3. **Fill Template Details**:
+   - **Name**: Give your template a descriptive name (e.g., "Web Development Services")
+   - **Description**: Optional brief description of the template
+   - **Line Items**: Add multiple line items with descriptions, quantities, and rates
+   - **Tax Rate**: Set a default tax rate for this template
+   - **Notes**: Add default notes that will appear on invoices using this template
+   - **Status**: Mark as active/inactive to control availability
+
+#### Using Templates in Invoices
+
+1. **Create New Invoice**: Go to Invoices and click "Create Invoice"
+2. **Select Template**: Choose a template from the dropdown menu
+3. **Auto-Population**: The template will automatically fill in:
+   - All line items with descriptions, quantities, and rates
+   - Default tax rate
+   - Default notes
+4. **Customize**: You can still modify any field after applying the template
+5. **Apply Template Button**: Use the "Apply Template" button to reapply template data
+
+#### Template Management
+
+- **View All Templates**: See all templates with their status, total amounts, and creation dates
+- **Edit Templates**: Modify existing templates - changes won't affect previously created invoices
+- **Delete Templates**: Remove templates that are no longer needed
+- **Active/Inactive Status**: Control which templates appear in the invoice creation dropdown
+
+#### Template Features
+
+- **Real-time Calculations**: See subtotal, tax, and total amounts as you build templates
+- **Multiple Line Items**: Add unlimited line items to templates
+- **Flexible Pricing**: Support for different quantities and rates per line item
+- **Tax Integration**: Templates include tax rate settings
+- **Notes System**: Default notes that can be customized per invoice
+
+#### Navigation and Shortcuts
+
+- **Sidebar Navigation**: Templates appear in the main navigation menu
+- **Keyboard Shortcut**: Press `Alt+T` to quickly access templates
+- **Quick Actions**: Edit and delete templates directly from the templates table
+
+### Benefits of Using Templates
+
+- **Time Saving**: Quickly create invoices for recurring services
+- **Consistency**: Ensure consistent pricing and descriptions across invoices
+- **Professional**: Maintain professional standards with pre-defined templates
+- **Efficiency**: Reduce data entry errors and speed up invoice creation
+- **Flexibility**: Templates serve as starting points that can be customized per invoice
+
 ## User Documentation
 
-For end-user documentation, including how to use the application features, please refer to the comprehensive documentation in the `/docs` directory or visit the documentation website.
+For end-user documentation, including how to use the application features, please refer to the comprehensive documentation in the `/docs` directory:
+
+### Documentation Structure
+
+- **`/docs/features/`** - Detailed feature documentation
+  - `templates.md` - Complete guide to invoice templates system
+- **`/docs/user-guide/`** - Step-by-step user guides
+  - `templates-guide.md` - Templates user guide with workflows and best practices
+- **`/docs/api/`** - API documentation for developers
+- **`/docs/admin/`** - Administrator guides for system setup and maintenance
+
+### Key Documentation Files
+
+- **Templates Feature**: `/docs/features/templates.md` - Comprehensive templates documentation
+- **Templates User Guide**: `/docs/user-guide/templates-guide.md` - Step-by-step templates usage
+- **API Reference**: Available in `/docs/api` directory
+- **Setup Guide**: Administrator setup instructions in this README
 
 ## API Documentation
 

@@ -14,12 +14,14 @@ import {
   Bars3Icon,
   XMarkIcon,
   QuestionMarkCircleIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, shortcut: 'Alt+D' },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon, shortcut: 'Alt+C' },
   { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon, shortcut: 'Alt+I' },
+  { name: 'Templates', href: '/templates', icon: DocumentDuplicateIcon, shortcut: 'Alt+T' },
   { name: 'Payments', href: '/payments', icon: CreditCardIcon, shortcut: 'Alt+P' },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, shortcut: 'Alt+R' },
   { name: 'Settings', href: '/settings', icon: CogIcon, shortcut: 'Alt+S' },
@@ -69,12 +71,12 @@ const Sidebar = ({ className }: SidebarProps) => {
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         <div className="flex items-center">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">IN</span>
+            <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">BM</span>
             </div>
           </div>
           <div className="ml-3">
-            <h1 className="text-lg font-semibold text-gray-900">Invoice Ninja</h1>
+            <h1 className="text-lg font-semibold text-gray-900">Billing Monk</h1>
           </div>
         </div>
         

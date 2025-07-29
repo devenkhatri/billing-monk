@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Invoice Ninja clone will be built as a modern web application using Next.js 14+ with the App Router, TypeScript for type safety, and Google Sheets as the backend data store. The application will follow a component-based architecture with clear separation between UI components, business logic, and data access layers.
+Billing Monk will be built as a modern web application using Next.js 14+ with the App Router, TypeScript for type safety, and Google Sheets as the backend data store. The application will follow a component-based architecture with clear separation between UI components, business logic, and data access layers, with specific adaptations for Indian business requirements.
 
-The system will use Google Sheets API v4 for data operations, with each major entity (clients, invoices, payments, settings) stored in separate sheets within a single Google Spreadsheet. The frontend will be responsive and mobile-friendly, using Tailwind CSS for styling and React Hook Form for form management.
+The system will use Google Sheets API v4 for data operations, with each major entity (clients, invoices, payments, settings) stored in separate sheets within a single Google Spreadsheet. The frontend will be responsive and mobile-friendly, using Tailwind CSS for styling and React Hook Form for form management. The application will include Indian-specific features like GST compliance, INR currency support, and Indian date formats.
 
 ## Architecture
 
@@ -45,12 +45,14 @@ src/
 │   ├── (dashboard)/
 │   │   ├── clients/
 │   │   ├── invoices/
+│   │   ├── templates/
 │   │   ├── payments/
 │   │   ├── reports/
 │   │   └── settings/
 │   ├── api/
 │   │   ├── clients/
 │   │   ├── invoices/
+│   │   ├── templates/
 │   │   ├── payments/
 │   │   └── sheets/
 │   └── globals.css
@@ -95,6 +97,7 @@ interface Invoice {
   id: string;
   invoiceNumber: string;
   clientId: string;
+  templateId?: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   issueDate: Date;
   dueDate: Date;
@@ -106,6 +109,8 @@ interface Invoice {
   paidAmount: number;
   balance: number;
   notes?: string;
+  isRecurring: boolean;
+  recurringSchedule?: RecurringSchedule;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -116,6 +121,24 @@ interface LineItem {
   quantity: number;
   rate: number;
   amount: number;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  description?: string;
+  lineItems: TemplateLineItem[];
+  taxRate: number;
+  notes?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TemplateLineItem {
+  description: string;
+  quantity: number;
+  rate: number;
 }
 ```
 
@@ -151,6 +174,12 @@ class GoogleSheetsService {
   async updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice>
   async deleteInvoice(id: string): Promise<void>
 
+  async getTemplates(): Promise<Template[]>
+  async createTemplate(template: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>): Promise<Template>
+  async updateTemplate(id: string, updates: Partial<Template>): Promise<Template>
+  async deleteTemplate(id: string): Promise<void>
+  async getTemplate(id: string): Promise<Template | null>
+
   async getPayments(invoiceId?: string): Promise<Payment[]>
   async createPayment(payment: Omit<Payment, 'id' | 'createdAt'>): Promise<Payment>
 }
@@ -166,23 +195,40 @@ The application will use a single Google Spreadsheet with multiple sheets:
    - Columns: ID, Name, Email, Phone, Street, City, State, ZipCode, Country, CreatedAt, UpdatedAt
 
 2. **Invoices Sheet**: Stores invoice headers
-   - Columns: ID, InvoiceNumber, ClientID, Status, IssueDate, DueDate, Subtotal, TaxRate, TaxAmount, Total, PaidAmount, Balance, Notes, CreatedAt, UpdatedAt
+   - Columns: ID, InvoiceNumber, ClientID, TemplateID, Status, IssueDate, DueDate, Subtotal, TaxRate, TaxAmount, Total, PaidAmount, Balance, Notes, IsRecurring, CreatedAt, UpdatedAt
 
 3. **LineItems Sheet**: Stores invoice line items
    - Columns: ID, InvoiceID, Description, Quantity, Rate, Amount
 
-4. **Payments Sheet**: Stores payment records
+4. **Templates Sheet**: Stores invoice templates
+   - Columns: ID, Name, Description, TaxRate, Notes, IsActive, CreatedAt, UpdatedAt
+
+5. **TemplateLineItems Sheet**: Stores template line items
+   - Columns: ID, TemplateID, Description, Quantity, Rate
+
+6. **Payments Sheet**: Stores payment records
    - Columns: ID, InvoiceID, Amount, PaymentDate, PaymentMethod, Notes, CreatedAt
 
-5. **Settings Sheet**: Stores company and application settings
+7. **Settings Sheet**: Stores company and application settings
    - Columns: Key, Value, UpdatedAt
 
 ### Data Relationships
 
 - Clients have a one-to-many relationship with Invoices
+- Templates have a one-to-many relationship with TemplateLineItems
+- Templates have a one-to-many relationship with Invoices (optional reference)
 - Invoices have a one-to-many relationship with LineItems
 - Invoices have a one-to-many relationship with Payments
 - All relationships are maintained through ID references
+
+### Template System Architecture
+
+The template system provides reusable invoice structures:
+
+1. **Template Creation**: Users can create templates with predefined line items, tax rates, and notes
+2. **Template Application**: When creating invoices, users can select templates to auto-populate fields
+3. **Template Management**: Full CRUD operations for templates with active/inactive status
+4. **Template Integration**: Templates integrate seamlessly with the invoice creation workflow
 
 ## Error Handling
 

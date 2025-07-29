@@ -49,6 +49,16 @@
   - Add invoice editing functionality with real-time calculations
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
+- [x] 7.1. Implement invoice template management system
+  - Create template management page with CRUD operations for templates
+  - Build template creation form with line items, tax rates, and notes
+  - Implement template table with status, totals, and management actions
+  - Add template selection dropdown in invoice creation form
+  - Create template application functionality to auto-populate invoice fields
+  - Add active/inactive status management for templates
+  - Integrate templates with Google Sheets storage (Templates and TemplateLineItems sheets)
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12_
+
 - [x] 8. Create payment tracking and management features
   - Implement payment recording form with invoice association
   - Build payment history display for individual invoices

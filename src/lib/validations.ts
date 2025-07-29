@@ -5,7 +5,7 @@ export const addressSchema = z.object({
   street: z.string().min(1, 'Street address is required').max(200, 'Street address too long'),
   city: z.string().min(1, 'City is required').max(100, 'City name too long'),
   state: z.string().min(1, 'State is required').max(100, 'State name too long'),
-  zipCode: z.string().min(1, 'ZIP code is required').max(20, 'ZIP code too long'),
+  zipCode: z.string().min(1, 'PIN code is required').max(20, 'PIN code too long'),
   country: z.string().min(1, 'Country is required').max(100, 'Country name too long'),
 });
 
@@ -17,7 +17,7 @@ export const clientFormSchema = z.object({
   street: z.string().min(1, 'Street address is required').max(200, 'Street address too long'),
   city: z.string().min(1, 'City is required').max(100, 'City name too long'),
   state: z.string().min(1, 'State is required').max(100, 'State name too long'),
-  zipCode: z.string().min(1, 'ZIP code is required').max(20, 'ZIP code too long'),
+  zipCode: z.string().min(1, 'PIN code is required').max(20, 'PIN code too long'),
   country: z.string().min(1, 'Country is required').max(100, 'Country name too long'),
 });
 
@@ -71,7 +71,7 @@ export const invoiceFormSchema = z.object({
   issueDate: z.string().min(1, 'Issue date is required'),
   dueDate: z.string().min(1, 'Due date is required'),
   lineItems: z.array(lineItemFormSchema).min(1, 'At least one line item is required'),
-  taxRate: z.number().min(0, 'Tax rate cannot be negative').max(100, 'Tax rate cannot exceed 100%'),
+  taxRate: z.number().min(0, 'GST rate cannot be negative').max(100, 'GST rate cannot exceed 100%'),
   notes: z.string().max(1000, 'Notes too long').optional().or(z.literal('')),
   isRecurring: z.boolean(),
   recurringSchedule: recurringScheduleFormSchema.optional(),
@@ -154,7 +154,7 @@ export const templateFormSchema = z.object({
   name: z.string().min(1, 'Template name is required').max(100, 'Template name too long'),
   description: z.string().max(500, 'Description too long').optional().or(z.literal('')),
   lineItems: z.array(lineItemFormSchema).min(1, 'At least one line item is required'),
-  taxRate: z.number().min(0, 'Tax rate cannot be negative').max(100, 'Tax rate cannot exceed 100%'),
+  taxRate: z.number().min(0, 'GST rate cannot be negative').max(100, 'GST rate cannot exceed 100%'),
   notes: z.string().max(1000, 'Notes too long').optional().or(z.literal('')),
   isActive: z.boolean(),
 });
@@ -183,10 +183,11 @@ export const companySettingsFormSchema = z.object({
   street: z.string().min(1, 'Street address is required').max(200, 'Street address too long'),
   city: z.string().min(1, 'City is required').max(100, 'City name too long'),
   state: z.string().min(1, 'State is required').max(100, 'State name too long'),
-  zipCode: z.string().min(1, 'ZIP code is required').max(20, 'ZIP code too long'),
+  zipCode: z.string().min(1, 'PIN code is required').max(20, 'PIN code too long'),
   country: z.string().min(1, 'Country is required').max(100, 'Country name too long'),
-  taxRate: z.number().min(0, 'Tax rate cannot be negative').max(100, 'Tax rate cannot exceed 100%'),
-  paymentTerms: z.number().min(1, 'Payment terms must be at least 1 day').max(365, 'Payment terms too long'),
+  logo: z.string().optional().or(z.literal('')),
+  taxRate: z.coerce.number().min(0, 'GST rate cannot be negative').max(100, 'GST rate cannot exceed 100%'),
+  paymentTerms: z.coerce.number().min(1, 'Payment terms must be at least 1 day').max(365, 'Payment terms too long'),
   invoiceTemplate: z.string().min(1, 'Invoice template is required'),
   currency: z.string().min(1, 'Currency is required').max(10, 'Currency code too long'),
   dateFormat: z.string().min(1, 'Date format is required'),

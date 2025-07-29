@@ -58,8 +58,13 @@ export default function InvoicesPage() {
       }
 
       if (clientsData.success) {
+        // Handle the clients API response structure
+        const clientsArray: Client[] = Array.isArray(clientsData.data)
+          ? clientsData.data
+          : (clientsData.data as any)?.clients || [];
+
         // Convert date strings back to Date objects
-        const clientsWithDates = clientsData.data.map(client => ({
+        const clientsWithDates = clientsArray.map((client: Client) => ({
           ...client,
           createdAt: new Date(client.createdAt),
           updatedAt: new Date(client.updatedAt)
@@ -103,7 +108,7 @@ export default function InvoicesPage() {
       setError(null);
 
       const response = await fetch(`/api/invoices/${invoice.id}/pdf`);
-      
+
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error?.message || 'Failed to generate PDF');
@@ -276,22 +281,20 @@ export default function InvoicesPage() {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('invoices')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'invoices'
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'invoices'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             <DocumentTextIcon className="h-5 w-5 inline mr-2" />
             All Invoices
           </button>
           <button
             onClick={() => setActiveTab('recurring')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'recurring'
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'recurring'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+              }`}
           >
             <CalendarIcon className="h-5 w-5 inline mr-2" />
             Recurring Invoices

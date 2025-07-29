@@ -1,62 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { templateFormSchema } from '@/lib/validations';
-import { ApiResponse, Template, UpdateTemplateData } from '@/types';
-import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
+import { ApiResponse, Template } from '@/types';
+import { withErrorHandling } from '@/lib/error-handler';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    }
-
-    const { id } = await params;
-
-    if (!id) {
-      return createErrorResponse('VALIDATION_ERROR', 'Template ID is required', 400);
+      throw new Error('Authentication required');
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const template = await sheetsService.getTemplate(id);
+    const template = await sheetsService.getTemplate(params.id);
 
     if (!template) {
-      return createErrorResponse('NOT_FOUND', 'Template not found', 404);
+      throw new Error('Template not found');
     }
 
-    return createSuccessResponse(template);
-  } catch (error) {
-    console.error('Error fetching template:', error);
-    return createErrorResponse(
-      'FETCH_ERROR',
-      'Failed to fetch template',
-      500,
-      error
-    );
-  }
+    return template;
+  }, 'fetch template');
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    }
-
-    const { id } = await params;
-
-    if (!id) {
-      return createErrorResponse('VALIDATION_ERROR', 'Template ID is required', 400);
+      throw new Error('Authentication required');
     }
 
     const body = await request.json();
@@ -64,84 +44,42 @@ export async function PUT(
     // Validate request body
     const result = templateFormSchema.safeParse(body);
     if (!result.success) {
-      return createErrorResponse(
-        'VALIDATION_ERROR',
-        'Invalid template data',
-        400,
-        result.error.issues
-      );
+      throw result.error;
     }
-
-    const formData = result.data;
-    
-    // Transform form data to update template data
-    const lineItems = formData.lineItems.map(item => ({
-      description: item.description,
-      quantity: item.quantity,
-      rate: item.rate,
-      amount: item.quantity * item.rate
-    }));
-
-    const updateData: UpdateTemplateData = {
-      name: formData.name,
-      description: formData.description,
-      lineItems,
-      taxRate: formData.taxRate,
-      notes: formData.notes,
-      isActive: formData.isActive
-    };
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const template = await sheetsService.updateTemplate(id, updateData);
+    
+    // Transform form data to update data
+    const updateData = {
+      name: result.data.name,
+      description: result.data.description || undefined,
+      lineItems: result.data.lineItems.map(item => ({
+        description: item.description,
+        quantity: item.quantity,
+        rate: item.rate,
+        amount: item.quantity * item.rate
+      })),
+      taxRate: result.data.taxRate,
+      notes: result.data.notes || undefined,
+      isActive: result.data.isActive,
+    };
 
-    if (!template) {
-      return createErrorResponse('NOT_FOUND', 'Template not found', 404);
-    }
-
-    return createSuccessResponse(template);
-  } catch (error) {
-    console.error('Error updating template:', error);
-    return createErrorResponse(
-      'UPDATE_ERROR',
-      'Failed to update template',
-      500,
-      error
-    );
-  }
+    const template = await sheetsService.updateTemplate(params.id, updateData);
+    return template;
+  }, 'update template');
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
     if (!session?.accessToken) {
-      return createErrorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    }
-
-    const { id } = await params;
-
-    if (!id) {
-      return createErrorResponse('VALIDATION_ERROR', 'Template ID is required', 400);
+      throw new Error('Authentication required');
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deleteTemplate(id);
+    await sheetsService.deleteTemplate(params.id);
 
-    if (!success) {
-      return createErrorResponse('NOT_FOUND', 'Template not found', 404);
-    }
-
-    return createSuccessResponse({ id });
-  } catch (error) {
-    console.error('Error deleting template:', error);
-    return createErrorResponse(
-      'DELETE_ERROR',
-      'Failed to delete template',
-      500,
-      error
-    );
-  }
+    return { message: 'Template deleted successfully' };
+  }, 'delete template');
 }

@@ -37,6 +37,7 @@ interface SettingsFormProps {
 }
 
 const currencyOptions = [
+  { value: 'INR', label: 'Indian Rupee (₹)' },
   { value: 'USD', label: 'US Dollar (USD)' },
   { value: 'EUR', label: 'Euro (EUR)' },
   { value: 'GBP', label: 'British Pound (GBP)' },
@@ -46,19 +47,20 @@ const currencyOptions = [
 ];
 
 const dateFormatOptions = [
-  { value: 'MM/dd/yyyy', label: 'MM/dd/yyyy (12/31/2023)' },
   { value: 'dd/MM/yyyy', label: 'dd/MM/yyyy (31/12/2023)' },
-  { value: 'yyyy-MM-dd', label: 'yyyy-MM-dd (2023-12-31)' },
-  { value: 'MMM dd, yyyy', label: 'MMM dd, yyyy (Dec 31, 2023)' }
+  { value: 'dd-MM-yyyy', label: 'dd-MM-yyyy (31-12-2023)' },
+  { value: 'dd MMM yyyy', label: 'dd MMM yyyy (31 Dec 2023)' },
+  { value: 'MM/dd/yyyy', label: 'MM/dd/yyyy (12/31/2023)' },
+  { value: 'yyyy-MM-dd', label: 'yyyy-MM-dd (2023-12-31)' }
 ];
 
 const timeZoneOptions = [
-  { value: 'America/New_York', label: 'Eastern Time (ET)' },
-  { value: 'America/Chicago', label: 'Central Time (CT)' },
-  { value: 'America/Denver', label: 'Mountain Time (MT)' },
-  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'Asia/Kolkata', label: 'Indian Standard Time (IST)' },
+  { value: 'Asia/Dubai', label: 'Gulf Standard Time (GST)' },
+  { value: 'Asia/Singapore', label: 'Singapore Standard Time (SGT)' },
   { value: 'Europe/London', label: 'Greenwich Mean Time (GMT)' },
-  { value: 'Europe/Paris', label: 'Central European Time (CET)' },
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
   { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST)' },
   { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET)' }
 ];
@@ -109,12 +111,12 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
       zipCode: '',
       country: '',
       logo: '',
-      taxRate: 0,
+      taxRate: 18,
       paymentTerms: 30,
       invoiceTemplate: 'default',
-      currency: 'USD',
-      dateFormat: 'MM/dd/yyyy',
-      timeZone: 'America/New_York'
+      currency: 'INR',
+      dateFormat: 'dd/MM/yyyy',
+      timeZone: 'Asia/Kolkata'
     }
   });
 
@@ -254,7 +256,7 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
             >
               <Input
                 {...register('street')}
-                placeholder="123 Main Street"
+                placeholder="123, MG Road, Bandra West"
                 disabled={isLoading}
               />
             </FormField>
@@ -267,31 +269,31 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
           >
             <Input
               {...register('city')}
-              placeholder="New York"
+              placeholder="Mumbai"
               disabled={isLoading}
             />
           </FormField>
 
           <FormField
-            label="State/Province"
+            label="State"
             error={errors.state?.message}
             required
           >
             <Input
               {...register('state')}
-              placeholder="NY"
+              placeholder="Maharashtra"
               disabled={isLoading}
             />
           </FormField>
 
           <FormField
-            label="ZIP/Postal Code"
+            label="PIN Code"
             error={errors.zipCode?.message}
             required
           >
             <Input
               {...register('zipCode')}
-              placeholder="10001"
+              placeholder="400001"
               disabled={isLoading}
             />
           </FormField>
@@ -303,7 +305,7 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
           >
             <Input
               {...register('country')}
-              placeholder="United States"
+              placeholder="India"
               disabled={isLoading}
             />
           </FormField>
@@ -315,7 +317,7 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoice Settings</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
-            label="Default Tax Rate (%)"
+            label="Default GST Rate (%)"
             error={errors.taxRate?.message}
           >
             <Input
@@ -324,7 +326,7 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
               step="0.01"
               min="0"
               max="100"
-              placeholder="8.25"
+              placeholder="18"
               disabled={isLoading}
             />
           </FormField>

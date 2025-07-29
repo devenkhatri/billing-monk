@@ -43,11 +43,30 @@ export async function GET(request: NextRequest) {
     try {
       const service = await GoogleSheetsService.getAuthenticatedService();
       
-      // Test connection by trying to fetch data
-      const [clients, settings] = await Promise.all([
-        service.getClients(),
-        service.getCompanySettings()
-      ]);
+      // First, test basic connection by getting spreadsheet info
+      const spreadsheetInfo = await service.getSpreadsheetInfo();
+      
+      // Check if required sheets exist
+      const existingSheets = spreadsheetInfo.sheets?.map(sheet => sheet.properties?.title) || [];
+      const requiredSheets = ['Clients', 'Invoices', 'LineItems', 'Payments', 'Settings', 'Templates'];
+      const missingSheets = requiredSheets.filter(sheet => !existingSheets.includes(sheet));
+      
+      let clientCount = 0;
+      let hasSettings = false;
+      
+      // Only try to fetch data if sheets exist
+      if (missingSheets.length === 0) {
+        try {
+          const [clients, settings] = await Promise.all([
+            service.getClients(),
+            service.getCompanySettings()
+          ]);
+          clientCount = clients.length;
+          hasSettings = !!settings;
+        } catch (dataError) {
+          console.warn('Could not fetch data from sheets:', dataError);
+        }
+      }
 
       const response: ApiResponse<{
         isConnected: boolean;
@@ -55,14 +74,18 @@ export async function GET(request: NextRequest) {
         clientCount: number;
         hasSettings: boolean;
         message: string;
+        missingSheets?: string[];
       }> = {
         success: true,
         data: {
           isConnected: true,
-          sheetsInitialized: true,
-          clientCount: clients.length,
-          hasSettings: !!settings,
-          message: 'Google Sheets integration is working'
+          sheetsInitialized: missingSheets.length === 0,
+          clientCount,
+          hasSettings,
+          message: missingSheets.length === 0 
+            ? 'Google Sheets integration is working'
+            : `Missing required sheets: ${missingSheets.join(', ')}`,
+          missingSheets: missingSheets.length > 0 ? missingSheets : undefined
         }
       };
       return NextResponse.json(response);
@@ -82,7 +105,7 @@ export async function GET(request: NextRequest) {
           sheetsInitialized: false,
           clientCount: 0,
           hasSettings: false,
-          message: 'Failed to connect to Google Sheets'
+          message: error instanceof Error ? error.message : 'Failed to connect to Google Sheets'
         }
       };
       return NextResponse.json(response);
@@ -132,6 +155,7 @@ export async function POST(request: NextRequest) {
     // Note: In a real implementation, you would need to update the environment variable
     // or store the spreadsheet ID in a database. For now, we'll just validate the connection.
     try {
+      // Create a temporary service with the provided spreadsheet ID to test connection
       const service = new GoogleSheetsService(session.accessToken, spreadsheetId);
       
       // Test the connection by trying to read from the spreadsheet

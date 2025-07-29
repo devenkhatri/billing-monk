@@ -16,9 +16,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     const settings = await sheetsService.getCompanySettings();
-    
+
     if (!settings) {
-      return createErrorResponse('SETTINGS_NOT_FOUND', 'Company settings not found', 404);
+      return createErrorResponse('NOT_FOUND', 'Company settings not found', 404);
     }
 
     return createSuccessResponse(settings);
@@ -42,9 +42,30 @@ export async function PUT(request: NextRequest): Promise<NextResponse<ApiRespons
     }
 
     const body = await request.json();
-    
+    console.log('******* Received request body:', body);
+
+    // Transform the data structure to match the form schema
+    const formData = {
+      name: body.name,
+      email: body.email,
+      phone: body.phone || '',
+      street: body.address?.street || body.street,
+      city: body.address?.city || body.city,
+      state: body.address?.state || body.state,
+      zipCode: body.address?.zipCode || body.zipCode,
+      country: body.address?.country || body.country,
+      logo: body.logo || '',
+      taxRate: body.taxRate,
+      paymentTerms: body.paymentTerms,
+      invoiceTemplate: body.invoiceTemplate,
+      currency: body.currency,
+      dateFormat: body.dateFormat,
+      timeZone: body.timeZone,
+    };
+
     // Validate request body
-    const result = companySettingsFormSchema.safeParse(body);
+    const result = companySettingsFormSchema.safeParse(formData);
+    console.log('******* Validation result:', result);
     if (!result.success) {
       return createErrorResponse(
         'VALIDATION_ERROR',
@@ -55,7 +76,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse<ApiRespons
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    
+
     // Transform form data to settings data
     const settingsData: CompanySettings = {
       name: result.data.name,
@@ -68,6 +89,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse<ApiRespons
         zipCode: result.data.zipCode,
         country: result.data.country,
       },
+      logo: result.data.logo || undefined,
       taxRate: result.data.taxRate,
       paymentTerms: result.data.paymentTerms,
       invoiceTemplate: result.data.invoiceTemplate,

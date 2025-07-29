@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
-import { timeEntryFormSchema } from '@/lib/validations';
+import { timeEntryUpdateSchema } from '@/lib/validations';
 import { ApiResponse, TimeEntry } from '@/types';
 import { withErrorHandling } from '@/lib/error-handler';
 import { getServerSession } from 'next-auth';
@@ -20,18 +20,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const body = await request.json();
-    
+
     // Validate request body
-    const result = timeEntryFormSchema.safeParse(body);
+    const result = timeEntryUpdateSchema.safeParse(body);
     if (!result.success) {
       throw result.error;
     }
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    
+
     // Get task to determine project ID
-    const task = await sheetsService.getTask(result.data.taskId);
+    const task = await sheetsService.getTask(result.data.taskId!);
     if (!task) {
       throw new Error('Task not found');
     }
@@ -50,7 +51,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Transform form data to update data
     const updateData = {
-      taskId: result.data.taskId,
+      taskId: result.data.taskId!,
       projectId: task.projectId,
       description: result.data.description || undefined,
       startTime: new Date(result.data.startTime),
@@ -60,8 +61,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       hourlyRate: result.data.hourlyRate,
     };
 
-    const timeEntry = await sheetsService.updateTimeEntry(params.id, updateData);
-    
+    const timeEntry = await sheetsService.updateTimeEntry(id, updateData);
+
     if (!timeEntry) {
       throw new Error('Time entry not found');
     }
@@ -78,8 +79,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deleteTimeEntry(params.id);
+    const success = await sheetsService.deleteTimeEntry(id);
 
     if (!success) {
       throw new Error('Time entry not found');

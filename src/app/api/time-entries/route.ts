@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
-import { timeEntryFormSchema } from '@/lib/validations';
+import { timeEntryCreateSchema } from '@/lib/validations';
 import { ApiResponse, TimeEntry } from '@/types';
 import { withErrorHandling } from '@/lib/error-handler';
 import { getServerSession } from 'next-auth';
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate request body
-    const result = timeEntryFormSchema.safeParse(body);
+    const result = timeEntryCreateSchema.safeParse(body);
     if (!result.success) {
       throw result.error;
     }

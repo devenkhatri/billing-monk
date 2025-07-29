@@ -213,6 +213,8 @@ export const appSettingsFormSchema = z.object({
   googleSheetsId: z.string().optional().or(z.literal('')),
   autoBackup: z.boolean(),
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']),
+  theme: z.enum(['light', 'dark', 'system']).default('light'),
+  colorTheme: z.enum(['default', 'lavender', 'mint', 'peach', 'sky', 'rose', 'sage', 'coral', 'periwinkle']).default('default'),
 });
 
 export const appSettingsSchema = z.object({
@@ -221,6 +223,8 @@ export const appSettingsSchema = z.object({
   lastBackup: z.date().optional(),
   autoBackup: z.boolean(),
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']),
+  theme: z.enum(['light', 'dark', 'system']).default('light'),
+  colorTheme: z.enum(['default', 'lavender', 'mint', 'peach', 'sky', 'rose', 'sage', 'coral', 'periwinkle']).default('default'),
 });
 
 // API validation schemas
@@ -338,6 +342,26 @@ export const timeEntryFormSchema = z.object({
   isBillable: z.boolean().default(true),
 });
 
+export const timeEntryCreateSchema = z.object({
+  taskId: z.string().uuid('Invalid task ID'),
+  description: z.string().max(500, 'Description too long').optional().or(z.literal('')),
+  startTime: z.string().min(1, 'Start time is required'),
+  endTime: z.string().optional().or(z.literal('')),
+  duration: z.number().min(0, 'Duration must be positive'),
+  isBillable: z.boolean().default(true),
+  hourlyRate: z.number().min(0).optional(),
+});
+
+export const timeEntryUpdateSchema = z.object({
+  taskId: z.string().uuid('Invalid task ID'),
+  description: z.string().max(500, 'Description too long').optional().or(z.literal('')),
+  startTime: z.string().min(1, 'Start time is required'),
+  endTime: z.string().optional().or(z.literal('')),
+  duration: z.number().min(0, 'Duration must be positive'),
+  isBillable: z.boolean().default(true),
+  hourlyRate: z.number().min(0).optional(),
+});
+
 export const timeEntrySchema = z.object({
   id: z.string().uuid(),
   taskId: z.string().uuid(),
@@ -363,6 +387,8 @@ export type TemplateFormData = z.infer<typeof templateFormSchema>;
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
 export type TaskFormData = z.infer<typeof taskFormSchema>;
 export type TimeEntryFormData = z.infer<typeof timeEntryFormSchema>;
+export type TimeEntryCreateData = z.infer<typeof timeEntryCreateSchema>;
+export type TimeEntryUpdateData = z.infer<typeof timeEntryUpdateSchema>;
 export type CompanySettingsFormData = z.infer<typeof companySettingsFormSchema>;
 export type AppSettingsFormData = z.infer<typeof appSettingsFormSchema>;
 

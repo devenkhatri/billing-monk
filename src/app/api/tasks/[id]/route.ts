@@ -20,8 +20,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const task = await sheetsService.getTask(params.id);
+    const task = await sheetsService.getTask(id);
 
     if (!task) {
       throw new Error('Task not found');
@@ -39,6 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const body = await request.json();
     
     // Validate request body
@@ -63,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       tags: result.data.tags,
     };
 
-    const task = await sheetsService.updateTask(params.id, updateData);
+    const task = await sheetsService.updateTask(id, updateData);
     
     if (!task) {
       throw new Error('Task not found');
@@ -81,8 +83,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deleteTask(params.id);
+    const success = await sheetsService.deleteTask(id);
 
     if (!success) {
       throw new Error('Task not found');

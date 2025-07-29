@@ -32,13 +32,13 @@ export function AppInitializer({ children }: AppInitializerProps) {
         <div className="max-w-md w-full text-center">
           <div className="bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              Welcome to Invoice Ninja Clone
+              Welcome to Billing Monk
             </h1>
             <p className="text-gray-600 mb-6">
               Please sign in with your Google account to continue.
             </p>
-            <Button 
-              onClick={() => signIn('google')} 
+            <Button
+              onClick={() => signIn('google')}
               className="w-full"
               size="lg"
             >
@@ -55,11 +55,12 @@ export function AppInitializer({ children }: AppInitializerProps) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <Alert
-            type="error"
+            variant="error"
             title="Initialization Error"
-            message={error}
             className="mb-4"
-          />
+          >
+            {error}
+          </Alert>
           <Button onClick={retryInitialization} className="w-full">
             Retry Initialization
           </Button>

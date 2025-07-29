@@ -1,16 +1,16 @@
 # General FAQ
 
-This section covers frequently asked questions about Invoice Ninja Clone, including basic functionality, features, and common usage scenarios.
+This section covers frequently asked questions about Billing Monk, including basic functionality, features, and common usage scenarios.
 
-## What is Invoice Ninja Clone?
+## What is Billing Monk?
 
-### Q: What is Invoice Ninja Clone?
-**A:** Invoice Ninja Clone is a comprehensive invoice management system built with Next.js that helps businesses manage clients, create professional invoices, track payments, and generate reports. It uses Google Sheets as the backend data store, making it easy to set up and maintain.
+### Q: What is Billing Monk?
+**A:** Billing Monk is a comprehensive invoice management system built with Next.js that helps businesses manage clients, create professional invoices, track payments, and generate reports. It uses Google Sheets as the backend data store, making it easy to set up and maintain.
 
 ### Q: How is this different from the original Invoice Ninja?
-**A:** Invoice Ninja Clone is a simplified, Google Sheets-based alternative that focuses on core invoicing functionality. It's designed to be easier to set up and maintain while providing essential features for small to medium businesses.
+**A:** Billing Monk is a simplified, Google Sheets-based alternative that focuses on core invoicing functionality. It's designed to be easier to set up and maintain while providing essential features for small to medium businesses.
 
-### Q: Who should use Invoice Ninja Clone?
+### Q: Who should use Billing Monk?
 **A:** This system is ideal for:
 - Small to medium businesses
 - Freelancers and consultants
@@ -52,7 +52,7 @@ This section covers frequently asked questions about Invoice Ninja Clone, includ
 
 ## Technical Requirements
 
-### Q: What do I need to run Invoice Ninja Clone?
+### Q: What do I need to run Billing Monk?
 **A:** You need:
 - A Google account for Sheets integration
 - Node.js 18+ for running the application
@@ -60,7 +60,7 @@ This section covers frequently asked questions about Invoice Ninja Clone, includ
 - Modern web browser for accessing the interface
 
 ### Q: Can I run this on shared hosting?
-**A:** No, Invoice Ninja Clone requires Node.js hosting. Suitable platforms include:
+**A:** No, Billing Monk requires Node.js hosting. Suitable platforms include:
 - Vercel (recommended)
 - Netlify
 - Heroku
@@ -199,8 +199,8 @@ Automated migration tools are not currently available.
 
 ## Pricing and Licensing
 
-### Q: How much does Invoice Ninja Clone cost?
-**A:** Invoice Ninja Clone is open source and free to use. Costs you might incur:
+### Q: How much does Billing Monk cost?
+**A:** Billing Monk is open source and free to use. Costs you might incur:
 - Hosting fees (varies by provider)
 - Google Cloud API usage (typically minimal)
 - Domain name registration (optional)

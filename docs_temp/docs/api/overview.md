@@ -1,6 +1,6 @@
 # API Overview
 
-Invoice Ninja Clone provides a comprehensive REST API that allows developers to integrate with the invoicing system programmatically. This API enables you to manage clients, invoices, payments, and other resources through HTTP requests.
+Billing Monk provides a comprehensive REST API that allows developers to integrate with the invoicing system programmatically. This API enables you to manage clients, invoices, payments, and other resources through HTTP requests.
 
 ## API Architecture
 

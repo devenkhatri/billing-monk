@@ -20,8 +20,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const project = await sheetsService.getProject(params.id);
+    const project = await sheetsService.getProject(id);
 
     if (!project) {
       throw new Error('Project not found');
@@ -39,6 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const body = await request.json();
     
     // Validate request body
@@ -62,7 +64,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       isActive: result.data.isActive,
     };
 
-    const project = await sheetsService.updateProject(params.id, updateData);
+    const project = await sheetsService.updateProject(id, updateData);
     
     if (!project) {
       throw new Error('Project not found');
@@ -80,8 +82,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const success = await sheetsService.deleteProject(params.id);
+    const success = await sheetsService.deleteProject(id);
 
     if (!success) {
       throw new Error('Project not found');

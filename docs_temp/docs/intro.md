@@ -2,13 +2,13 @@
 sidebar_position: 1
 ---
 
-# Welcome to Invoice Ninja Clone Documentation
+# Welcome to Billing Monk Documentation
 
-Welcome to the comprehensive documentation for **Invoice Ninja Clone**, a modern, Google Sheets-based invoice management system built with Next.js.
+Welcome to the comprehensive documentation for **Billing Monk**, a modern, Google Sheets-based invoice management system built with Next.js.
 
-## What is Invoice Ninja Clone?
+## What is Billing Monk?
 
-Invoice Ninja Clone is a complete invoicing solution that helps businesses manage their billing workflow efficiently. It combines the power of modern web technologies with the simplicity and accessibility of Google Sheets as a backend.
+Billing Monk is a complete invoicing solution that helps businesses manage their billing workflow efficiently. It combines the power of modern web technologies with the simplicity and accessibility of Google Sheets as a backend.
 
 ### Key Features
 
@@ -23,7 +23,7 @@ Invoice Ninja Clone is a complete invoicing solution that helps businesses manag
 ## Quick Start Guide
 
 ### For Users
-If you're ready to start using Invoice Ninja Clone:
+If you're ready to start using Billing Monk:
 
 1. **[Getting Started](./user-guide/getting-started.md)** - Learn the basics
 2. **[First Login](./user-guide/first-login.md)** - Complete your initial setup

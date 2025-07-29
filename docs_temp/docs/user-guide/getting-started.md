@@ -1,10 +1,10 @@
 # Getting Started
 
-Welcome to Invoice Ninja Clone, a comprehensive invoice management system that helps you manage clients, create professional invoices, track payments, and generate reports. This guide will help you get started with using the application.
+Welcome to Billing Monk, a comprehensive invoice management system that helps you manage clients, create professional invoices, track payments, and generate reports. This guide will help you get started with using the application.
 
-## What is Invoice Ninja Clone?
+## What is Billing Monk?
 
-Invoice Ninja Clone is a modern web-based invoice management system built with Next.js and Google Sheets as the backend. It provides all the essential features you need to manage your invoicing workflow:
+Billing Monk is a modern web-based invoice management system built with Next.js and Google Sheets as the backend. It provides all the essential features you need to manage your invoicing workflow:
 
 - **Client Management**: Store and organize client information
 - **Invoice Creation**: Create professional invoices with customizable templates
@@ -15,7 +15,7 @@ Invoice Ninja Clone is a modern web-based invoice management system built with N
 
 ## System Requirements
 
-To use Invoice Ninja Clone, you need:
+To use Billing Monk, you need:
 
 - A modern web browser (Chrome, Firefox, Safari, Edge)
 - A Google account for Google Sheets integration
@@ -23,7 +23,7 @@ To use Invoice Ninja Clone, you need:
 
 ## Quick Start
 
-1. **Access the Application**: Navigate to your Invoice Ninja Clone installation URL
+1. **Access the Application**: Navigate to your Billing Monk installation URL
 2. **First-Time Setup**: If this is your first time, you'll be guided through the Google Sheets setup process
 3. **Sign In**: Use your Google account to authenticate
 4. **Dashboard**: Once logged in, you'll see the main dashboard with key metrics

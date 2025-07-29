@@ -18,6 +18,7 @@ import {
   FolderIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, shortcut: 'Alt+D' },
@@ -72,7 +73,7 @@ const Sidebar = ({ className }: SidebarProps) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center">
           <div className="flex-shrink-0">
             <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
@@ -80,18 +81,21 @@ const Sidebar = ({ className }: SidebarProps) => {
             </div>
           </div>
           <div className="ml-3">
-            <h1 className="text-lg font-semibold text-gray-900">Billing Monk</h1>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing Monk</h1>
           </div>
         </div>
         
-        {/* Mobile menu button */}
-        <button
-          className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus-ring"
-          onClick={() => setIsMobileMenuOpen(false)}
-          aria-label="Close navigation menu"
-        >
-          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
-        </button>
+        {/* Theme toggle and mobile menu button */}
+        <div className="flex items-center space-x-2">
+          <ThemeToggle size="sm" />
+          <button
+            className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus-ring"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -105,8 +109,8 @@ const Sidebar = ({ className }: SidebarProps) => {
               className={clsx(
                 'group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors focus-ring',
                 isActive
-                  ? 'bg-blue-100 text-blue-900'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
               )}
               onClick={() => setIsMobileMenuOpen(false)}
               aria-current={isActive ? 'page' : undefined}
@@ -115,7 +119,7 @@ const Sidebar = ({ className }: SidebarProps) => {
               <item.icon
                 className={clsx(
                   'mr-3 h-5 w-5 flex-shrink-0',
-                  isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
+                  isActive ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400'
                 )}
                 aria-hidden="true"
               />
@@ -126,29 +130,29 @@ const Sidebar = ({ className }: SidebarProps) => {
       </nav>
 
       {/* Help section */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-4">
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
         <button
           onClick={showKeyboardShortcuts}
-          className="w-full flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors focus-ring"
+          className="w-full flex items-center px-2 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 rounded-md transition-colors focus-ring"
           aria-label="Show keyboard shortcuts (Press ? for help)"
           title="Show keyboard shortcuts (Press ? for help)"
         >
-          <QuestionMarkCircleIcon className="mr-3 h-5 w-5 text-gray-400" aria-hidden="true" />
+          <QuestionMarkCircleIcon className="mr-3 h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
           Keyboard Shortcuts
         </button>
       </div>
 
       {/* User section */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-4">
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-              <span className="text-gray-600 text-sm font-medium">U</span>
+            <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+              <span className="text-gray-600 dark:text-gray-300 text-sm font-medium">U</span>
             </div>
           </div>
           <div className="ml-3">
-            <p className="text-sm font-medium text-gray-700">User</p>
-            <p className="text-xs text-gray-500">user@example.com</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">User</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">user@example.com</p>
           </div>
         </div>
       </div>
@@ -159,7 +163,7 @@ const Sidebar = ({ className }: SidebarProps) => {
     <>
       {/* Desktop sidebar */}
       <div className={clsx('hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64', className)}>
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
+        <div className="flex flex-col flex-grow bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           <SidebarContent />
         </div>
       </div>
@@ -167,7 +171,7 @@ const Sidebar = ({ className }: SidebarProps) => {
       {/* Mobile menu button */}
       <div className="md:hidden fixed top-4 left-4 z-50">
         <button
-          className="p-2 rounded-md bg-white shadow-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus-ring"
+          className="p-2 rounded-md bg-white dark:bg-gray-800 shadow-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus-ring"
           onClick={() => setIsMobileMenuOpen(true)}
           aria-label="Open navigation menu"
           aria-expanded={isMobileMenuOpen}
@@ -184,7 +188,7 @@ const Sidebar = ({ className }: SidebarProps) => {
             onClick={() => setIsMobileMenuOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white">
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-gray-800">
             <SidebarContent />
           </div>
         </div>

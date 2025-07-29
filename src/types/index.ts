@@ -1,4 +1,4 @@
-// Core data types for the Invoice Ninja clone application
+// Core data types for the Billing Monk application
 import { DefaultSession } from 'next-auth'
 
 // NextAuth session extension
@@ -188,6 +188,8 @@ export interface AppSettings {
   lastBackup?: Date;
   autoBackup: boolean;
   backupFrequency: 'daily' | 'weekly' | 'monthly';
+  theme: 'light' | 'dark' | 'system';
+  colorTheme: 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle';
 }
 
 // API Response types
@@ -371,12 +373,16 @@ export interface CompanySettingsFormData {
   currency: string;
   dateFormat: string;
   timeZone: string;
+  theme: 'light' | 'dark' | 'system';
+  colorTheme: 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle';
 }
 
 export interface AppSettingsFormData {
   googleSheetsId?: string;
   autoBackup: boolean;
   backupFrequency: 'daily' | 'weekly' | 'monthly';
+  theme: 'light' | 'dark' | 'system';
+  colorTheme: 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle';
 }
 
 // Utility types for API operations
@@ -417,10 +423,19 @@ export interface DashboardMetrics {
 
 export interface ActivityItem {
   id: string;
-  type: 'invoice_created' | 'invoice_sent' | 'payment_received' | 'client_added';
+  type: 'invoice_created' | 'invoice_updated' | 'invoice_sent' | 'invoice_paid' | 'invoice_cancelled' | 
+        'payment_received' | 'payment_updated' | 'payment_deleted' |
+        'client_added' | 'client_updated' | 'client_deleted' |
+        'project_created' | 'project_updated' | 'project_completed' | 'project_deleted' |
+        'task_created' | 'task_updated' | 'task_completed' | 'task_deleted' |
+        'time_entry_created' | 'time_entry_updated' | 'time_entry_deleted' |
+        'template_created' | 'template_updated' | 'template_deleted' |
+        'settings_updated';
   description: string;
   timestamp: Date;
   relatedId?: string;
+  entityType?: 'invoice' | 'payment' | 'client' | 'project' | 'task' | 'time_entry' | 'template' | 'settings';
+  amount?: number;
 }
 
 // Report types

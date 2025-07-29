@@ -19,6 +19,24 @@
   --radius: 0.5rem;
 }
 
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #cbd5e1;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #334155;
+  --ring: #3b82f6;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -67,6 +85,18 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 /* Focus styles for accessibility */
@@ -182,15 +212,15 @@ body {
 
 /* Loading skeleton styles */
 .skeleton {
-  @apply bg-gray-200 animate-pulse rounded;
+  @apply bg-gray-200 dark:bg-gray-700 animate-pulse rounded;
 }
 
 .skeleton-text {
-  @apply h-4 bg-gray-200 animate-pulse rounded;
+  @apply h-4 bg-gray-200 dark:bg-gray-700 animate-pulse rounded;
 }
 
 .skeleton-avatar {
-  @apply w-10 h-10 bg-gray-200 animate-pulse rounded-full;
+  @apply w-10 h-10 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-full;
 }
 
 /* Form validation styles */

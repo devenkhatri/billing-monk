@@ -1,10 +1,10 @@
 # Environment Variables
 
-Environment variables are crucial for configuring Invoice Ninja Clone. This guide provides comprehensive documentation for all environment variables, their purposes, and configuration examples.
+Environment variables are crucial for configuring Billing Monk. This guide provides comprehensive documentation for all environment variables, their purposes, and configuration examples.
 
 ## Overview
 
-Invoice Ninja Clone uses environment variables to configure:
+Billing Monk uses environment variables to configure:
 - Application settings
 - Google OAuth authentication
 - Google Sheets integration

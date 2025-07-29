@@ -134,7 +134,7 @@ export class ApiClient {
   /**
    * Makes an HTTP request with error handling and retries
    */
-  private async makeRequest<T>(
+  async makeRequest<T>(
     url: string,
     options: RequestInit = {},
     retryCount = 0
@@ -317,15 +317,7 @@ export function withApiErrorHandling<T extends unknown[], R>(
 }
 
 // Import caching utilities
-import {
-  clientsCache,
-  invoicesCache,
-  paymentsCache,
-  settingsCache,
-  templatesCache,
-  cacheKeys,
-  cacheInvalidation
-} from './cache';
+import { apiCache, cachedFetch, invalidateCache } from './cache';
 
 /**
  * Cached API wrapper with optimistic updates
@@ -338,399 +330,179 @@ class CachedApiClient {
   }
 
   /**
-   * Get data with caching
+   * Get data with caching using the simple cache system
    */
   async getCached<T>(
-    cacheKey: string,
-    cache: any,
-    fetcher: () => Promise<T>,
+    url: string,
+    params?: Record<string, string>,
     ttl?: number
   ): Promise<T> {
-    // Try to get from cache first
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    // Fetch from API and cache
-    const data = await fetcher();
-    cache.set(cacheKey, data, ttl);
-    return data;
+    return cachedFetch<T>(url, { method: 'GET' }, ttl);
   }
 
   /**
-   * Update data with optimistic updates
+   * Update data with cache invalidation
    */
-  async updateOptimistic<T>(
-    cacheKey: string,
-    cache: any,
-    optimisticData: T,
-    updater: () => Promise<T>,
-    onError?: (error: any) => void
+  async updateWithInvalidation<T>(
+    url: string,
+    data: unknown,
+    method: 'POST' | 'PUT' | 'PATCH' = 'PUT',
+    invalidationPattern?: string
   ): Promise<T> {
-    // Store original data for rollback
-    const originalData = cache.get(cacheKey);
-
-    // Apply optimistic update
-    cache.set(cacheKey, optimisticData);
-
-    try {
-      // Perform actual update
-      const result = await updater();
-
-      // Update cache with real result
-      cache.set(cacheKey, result);
-
-      return result;
-    } catch (error) {
-      // Rollback on error
-      if (originalData) {
-        cache.set(cacheKey, originalData);
-      } else {
-        cache.delete(cacheKey);
-      }
-
-      if (onError) {
-        onError(error);
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * Batch operations for multiple updates
-   */
-  async batchUpdate<T>(operations: Array<() => Promise<T>>): Promise<T[]> {
-    // Execute all operations in parallel
-    const results = await Promise.allSettled(operations.map(op => op()));
-
-    // Separate successful and failed operations
-    const successful: T[] = [];
-    const errors: any[] = [];
-
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        successful.push(result.value);
-      } else {
-        errors.push({ index, error: result.reason });
-      }
+    const result = await this.apiClient.makeRequest<T>(url, {
+      method,
+      body: data ? JSON.stringify(data) : undefined,
     });
 
-    // If there are errors, log them but don't fail the entire batch
-    if (errors.length > 0) {
-      console.warn('Some batch operations failed:', errors);
+    // Invalidate related cache entries
+    if (invalidationPattern) {
+      invalidateCache(invalidationPattern);
     }
 
-    return successful;
+    return result;
+  }
+
+  /**
+   * Delete with cache invalidation
+   */
+  async deleteWithInvalidation<T>(
+    url: string,
+    invalidationPattern?: string
+  ): Promise<T> {
+    const result = await this.apiClient.delete<T>(url);
+
+    // Invalidate related cache entries
+    if (invalidationPattern) {
+      invalidateCache(invalidationPattern);
+    }
+
+    return result;
   }
 }
 
 const cachedApiClient = new CachedApiClient(apiClient);
 
-// Specific API functions with caching and optimistic updates
+// Specific API functions with caching
 export const clientsApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ?
-      `${cacheKeys.clients.all()}:${JSON.stringify(params)}` :
-      cacheKeys.clients.all();
-
-    return cachedApiClient.getCached(
-      cacheKey,
-      clientsCache,
-      () => apiClient.get<{ clients: Client[]; meta: any }>('/clients', params)
-    );
+    const url = params ? `/clients?${new URLSearchParams(params)}` : '/clients';
+    return cachedApiClient.getCached<{ clients: Client[]; meta: any }>(url, undefined, 2 * 60 * 1000);
   },
 
   getById: async (id: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.clients.byId(id),
-      clientsCache,
-      () => apiClient.get<Client>(`/clients/${id}`)
-    );
+    return cachedApiClient.getCached<Client>(`/clients/${id}`, undefined, 5 * 60 * 1000);
   },
 
   create: async (data: Partial<Client>) => {
-    const result = await apiClient.post<Client>('/clients', data);
-
-    // Invalidate relevant caches
-    cacheInvalidation.clients.invalidateAll();
-
+    const result = await cachedApiClient.updateWithInvalidation<Client>('/clients', data, 'POST', 'clients');
     return result;
   },
 
   update: async (id: string, data: Partial<Client>) => {
-    const optimisticData = { ...data, id };
-
-    return cachedApiClient.updateOptimistic(
-      cacheKeys.clients.byId(id),
-      clientsCache,
-      optimisticData,
-      () => apiClient.put<Client>(`/clients/${id}`, data),
-      () => cacheInvalidation.clients.invalidateById(id)
-    );
+    return cachedApiClient.updateWithInvalidation<Client>(`/clients/${id}`, data, 'PUT', 'clients');
   },
 
   delete: async (id: string) => {
-    // Optimistically remove from cache
-    clientsCache.delete(cacheKeys.clients.byId(id));
-
-    try {
-      const result = await apiClient.delete<void>(`/clients/${id}`);
-      cacheInvalidation.clients.invalidateAll();
-      return result;
-    } catch (error) {
-      // On error, invalidate to force refresh
-      cacheInvalidation.clients.invalidateAll();
-      throw error;
-    }
-  },
-
-  batchUpdate: async (updates: Array<{ id: string; data: Partial<Client> }>) => {
-    return cachedApiClient.batchUpdate(
-      updates.map(({ id, data }) => () => clientsApi.update(id, data))
-    );
+    return cachedApiClient.deleteWithInvalidation<void>(`/clients/${id}`, 'clients');
   }
 };
 
 export const invoicesApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ?
-      `${cacheKeys.invoices.all()}:${JSON.stringify(params)}` :
-      cacheKeys.invoices.all();
-
-    return cachedApiClient.getCached(
-      cacheKey,
-      invoicesCache,
-      () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices', params)
-    );
+    const url = params ? `/invoices?${new URLSearchParams(params)}` : '/invoices';
+    return cachedApiClient.getCached<{ invoices: any[]; meta: any }>(url, undefined, 2 * 60 * 1000);
   },
 
   getById: async (id: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.invoices.byId(id),
-      invoicesCache,
-      () => apiClient.get<any>(`/invoices/${id}`)
-    );
+    return cachedApiClient.getCached<any>(`/invoices/${id}`, undefined, 5 * 60 * 1000);
   },
 
   getByClient: async (clientId: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.invoices.byClient(clientId),
-      invoicesCache,
-      () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices', { clientId })
-    );
+    return cachedApiClient.getCached<{ invoices: any[]; meta: any }>(`/invoices?clientId=${clientId}`, undefined, 2 * 60 * 1000);
   },
 
   getRecurring: async () => {
-    return cachedApiClient.getCached(
-      cacheKeys.invoices.recurring(),
-      invoicesCache,
-      () => apiClient.get<{ invoices: any[]; meta: any }>('/invoices/recurring')
-    );
+    return cachedApiClient.getCached<{ invoices: any[]; meta: any }>('/invoices/recurring', undefined, 5 * 60 * 1000);
   },
 
   create: async (data: any) => {
-    const result = await apiClient.post<any>('/invoices', data);
-
-    // Invalidate relevant caches
-    cacheInvalidation.invoices.invalidateAll();
-    if (data.clientId) {
-      cacheInvalidation.invoices.invalidateByClient(data.clientId);
-    }
-
-    return result;
+    return cachedApiClient.updateWithInvalidation<any>('/invoices', data, 'POST', 'invoices');
   },
 
   update: async (id: string, data: any) => {
-    const optimisticData = { ...data, id };
-
-    return cachedApiClient.updateOptimistic(
-      cacheKeys.invoices.byId(id),
-      invoicesCache,
-      optimisticData,
-      () => apiClient.put<any>(`/invoices/${id}`, data),
-      () => cacheInvalidation.invoices.invalidateById(id)
-    );
+    return cachedApiClient.updateWithInvalidation<any>(`/invoices/${id}`, data, 'PUT', 'invoices');
   },
 
   delete: async (id: string) => {
-    // Optimistically remove from cache
-    invoicesCache.delete(cacheKeys.invoices.byId(id));
-
-    try {
-      const result = await apiClient.delete<void>(`/invoices/${id}`);
-      cacheInvalidation.invoices.invalidateAll();
-      return result;
-    } catch (error) {
-      // On error, invalidate to force refresh
-      cacheInvalidation.invoices.invalidateAll();
-      throw error;
-    }
+    return cachedApiClient.deleteWithInvalidation<void>(`/invoices/${id}`, 'invoices');
   },
 
   generatePdf: (id: string) =>
     apiClient.get<Blob>(`/invoices/${id}/pdf`),
 
   send: async (id: string) => {
-    const result = await apiClient.post<any>(`/invoices/${id}/send`);
-
-    // Invalidate invoice cache to reflect sent status
-    cacheInvalidation.invoices.invalidateById(id);
-
+    const result = await cachedApiClient.updateWithInvalidation<any>(`/invoices/${id}/send`, {}, 'POST', 'invoices');
     return result;
-  },
-
-  batchUpdate: async (updates: Array<{ id: string; data: any }>) => {
-    return cachedApiClient.batchUpdate(
-      updates.map(({ id, data }) => () => invoicesApi.update(id, data))
-    );
   }
 };
 
 export const paymentsApi = {
   getAll: async (params?: Record<string, string>) => {
-    const cacheKey = params ?
-      `${cacheKeys.payments.all()}:${JSON.stringify(params)}` :
-      cacheKeys.payments.all();
-
-    return cachedApiClient.getCached(
-      cacheKey,
-      paymentsCache,
-      () => apiClient.get<{ payments: Payment[]; meta: any }>('/payments', params)
-    );
+    const url = params ? `/payments?${new URLSearchParams(params)}` : '/payments';
+    return cachedApiClient.getCached<{ payments: Payment[]; meta: any }>(url, undefined, 2 * 60 * 1000);
   },
 
   getById: async (id: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.payments.byId(id),
-      paymentsCache,
-      () => apiClient.get<Payment>(`/payments/${id}`)
-    );
+    return cachedApiClient.getCached<Payment>(`/payments/${id}`, undefined, 5 * 60 * 1000);
   },
 
   getByInvoice: async (invoiceId: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.payments.byInvoice(invoiceId),
-      paymentsCache,
-      () => apiClient.get<{ payments: Payment[]; meta: any }>('/payments', { invoiceId })
-    );
+    return cachedApiClient.getCached<{ payments: Payment[]; meta: any }>(`/payments?invoiceId=${invoiceId}`, undefined, 2 * 60 * 1000);
   },
 
   create: async (data: Partial<Payment>) => {
-    const result = await apiClient.post<Payment>('/payments', data);
-
-    // Invalidate relevant caches
-    cacheInvalidation.payments.invalidateAll();
-    if (data.invoiceId) {
-      cacheInvalidation.payments.invalidateByInvoice(data.invoiceId);
-      cacheInvalidation.invoices.invalidateById(data.invoiceId);
-    }
-
+    const result = await cachedApiClient.updateWithInvalidation<Payment>('/payments', data, 'POST', 'payments');
+    // Also invalidate invoices cache since payment affects invoice status
+    invalidateCache('invoices');
     return result;
   },
 
   delete: async (id: string) => {
-    // Get payment data first to know which invoice to invalidate
-    const payment = paymentsCache.get(cacheKeys.payments.byId(id)) as Payment | undefined;
-
-    // Optimistically remove from cache
-    paymentsCache.delete(cacheKeys.payments.byId(id));
-
-    try {
-      const result = await apiClient.delete<void>(`/payments/${id}`);
-      cacheInvalidation.payments.invalidateAll();
-
-      // Invalidate related invoice cache
-      if (payment?.invoiceId) {
-        cacheInvalidation.invoices.invalidateById(payment.invoiceId);
-      }
-
-      return result;
-    } catch (error) {
-      // On error, invalidate to force refresh
-      cacheInvalidation.payments.invalidateAll();
-      throw error;
-    }
-  },
-
-  batchCreate: async (payments: Partial<Payment>[]) => {
-    return cachedApiClient.batchUpdate(
-      payments.map(data => () => paymentsApi.create(data))
-    );
+    const result = await cachedApiClient.deleteWithInvalidation<void>(`/payments/${id}`, 'payments');
+    // Also invalidate invoices cache since payment affects invoice status
+    invalidateCache('invoices');
+    return result;
   }
 };
 
 export const settingsApi = {
   getCompany: async () => {
-    return cachedApiClient.getCached(
-      cacheKeys.settings.company(),
-      settingsCache,
-      () => apiClient.get<any>('/settings'),
-      30 * 60 * 1000 // 30 minutes TTL for settings
-    );
+    return cachedApiClient.getCached<any>('/settings', undefined, 30 * 60 * 1000); // 30 minutes TTL for settings
   },
 
   updateCompany: async (data: any) => {
-    const result = await apiClient.put<any>('/settings', data);
-
-    // Invalidate settings cache
-    cacheInvalidation.settings.invalidateCompany();
-
-    return result;
+    return cachedApiClient.updateWithInvalidation<any>('/settings', data, 'PUT', 'settings');
   }
 };
 
 export const templatesApi = {
   getAll: async () => {
-    return cachedApiClient.getCached(
-      cacheKeys.templates.all(),
-      templatesCache,
-      () => apiClient.get<{ templates: any[]; meta: any }>('/templates')
-    );
+    return cachedApiClient.getCached<{ templates: any[]; meta: any }>('/templates', undefined, 5 * 60 * 1000);
   },
 
   getById: async (id: string) => {
-    return cachedApiClient.getCached(
-      cacheKeys.templates.byId(id),
-      templatesCache,
-      () => apiClient.get<any>(`/templates/${id}`)
-    );
+    return cachedApiClient.getCached<any>(`/templates/${id}`, undefined, 10 * 60 * 1000);
   },
 
   create: async (data: any) => {
-    const result = await apiClient.post<any>('/templates', data);
-
-    // Invalidate templates cache
-    cacheInvalidation.templates.invalidateAll();
-
-    return result;
+    return cachedApiClient.updateWithInvalidation<any>('/templates', data, 'POST', 'templates');
   },
 
   update: async (id: string, data: any) => {
-    const optimisticData = { ...data, id };
-
-    return cachedApiClient.updateOptimistic(
-      cacheKeys.templates.byId(id),
-      templatesCache,
-      optimisticData,
-      () => apiClient.put<any>(`/templates/${id}`, data),
-      () => cacheInvalidation.templates.invalidateById(id)
-    );
+    return cachedApiClient.updateWithInvalidation<any>(`/templates/${id}`, data, 'PUT', 'templates');
   },
 
   delete: async (id: string) => {
-    // Optimistically remove from cache
-    templatesCache.delete(cacheKeys.templates.byId(id));
-
-    try {
-      const result = await apiClient.delete<void>(`/templates/${id}`);
-      cacheInvalidation.templates.invalidateAll();
-      return result;
-    } catch (error) {
-      // On error, invalidate to force refresh
-      cacheInvalidation.templates.invalidateAll();
-      throw error;
-    }
+    return cachedApiClient.deleteWithInvalidation<void>(`/templates/${id}`, 'templates');
   }
 };

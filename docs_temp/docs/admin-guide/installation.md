@@ -1,6 +1,6 @@
 # Installation Guide
 
-This comprehensive guide walks you through installing Invoice Ninja Clone on your system. The application is built with Next.js and uses Google Sheets as the backend data store.
+This comprehensive guide walks you through installing Billing Monk on your system. The application is built with Next.js and uses Google Sheets as the backend data store.
 
 ## System Requirements
 
@@ -40,7 +40,7 @@ Before installing the application, you need to set up Google Cloud Console:
 #### Step 1: Create Google Cloud Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click "New Project" or select existing project
-3. Enter project name (e.g., "Invoice Ninja Clone")
+3. Enter project name (e.g., "Billing Monk")
 4. Note the Project ID for later use
 
 #### Step 2: Enable Required APIs

@@ -1,14 +1,14 @@
 # First Login
 
-This guide walks you through your first login experience and initial setup of Invoice Ninja Clone.
+This guide walks you through your first login experience and initial setup of Billing Monk.
 
 ## Authentication Process
 
-Invoice Ninja Clone uses Google OAuth for secure authentication. Here's what happens during your first login:
+Billing Monk uses Google OAuth for secure authentication. Here's what happens during your first login:
 
 ### Step 1: Access the Application
 
-1. Navigate to your Invoice Ninja Clone URL
+1. Navigate to your Billing Monk URL
 2. You'll see the login screen with a "Sign in with Google" button
 3. Click the button to begin authentication
 

@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/forms/form-field';
 import { useNotifications } from '@/lib/notification-context';
+import { useTheme } from '@/lib/theme-context';
+import { ColorThemeSelector } from '@/components/ui/color-theme-selector';
 
 const settingsSchema = z.object({
   name: z.string().min(1, 'Company name is required'),
@@ -27,7 +29,9 @@ const settingsSchema = z.object({
   invoiceTemplate: z.string().min(1, 'Invoice template is required'),
   currency: z.string().min(1, 'Currency is required'),
   dateFormat: z.string().min(1, 'Date format is required'),
-  timeZone: z.string().min(1, 'Time zone is required')
+  timeZone: z.string().min(1, 'Time zone is required'),
+  theme: z.enum(['light', 'dark', 'system']).default('light'),
+  colorTheme: z.enum(['default', 'lavender', 'mint', 'peach', 'sky', 'rose', 'sage', 'coral', 'periwinkle']).default('default')
 });
 
 interface SettingsFormProps {
@@ -74,6 +78,7 @@ const templateOptions = [
 
 export function SettingsForm({ initialData, onSubmit, isLoading = false }: SettingsFormProps) {
   const { addNotification } = useNotifications();
+  const { setTheme, setColorTheme } = useTheme();
   const [logoPreview, setLogoPreview] = useState<string | undefined>(initialData?.logo);
 
   const {
@@ -81,7 +86,7 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
     handleSubmit,
     formState: { errors },
     setValue,
-
+    watch,
     reset
   } = useForm<CompanySettingsFormData>({
     resolver: zodResolver(settingsSchema),
@@ -100,7 +105,9 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
       invoiceTemplate: initialData.invoiceTemplate,
       currency: initialData.currency,
       dateFormat: initialData.dateFormat,
-      timeZone: initialData.timeZone
+      timeZone: initialData.timeZone,
+      theme: (initialData as any).theme || 'light',
+      colorTheme: (initialData as any).colorTheme || 'default'
     } : {
       name: '',
       email: '',
@@ -116,7 +123,9 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
       invoiceTemplate: 'default',
       currency: 'INR',
       dateFormat: 'dd/MM/yyyy',
-      timeZone: 'Asia/Kolkata'
+      timeZone: 'Asia/Kolkata',
+      theme: 'light' as const,
+      colorTheme: 'default' as const
     }
   });
 
@@ -137,7 +146,9 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
         invoiceTemplate: initialData.invoiceTemplate,
         currency: initialData.currency,
         dateFormat: initialData.dateFormat,
-        timeZone: initialData.timeZone
+        timeZone: initialData.timeZone,
+        theme: (initialData as any).theme || 'light',
+        colorTheme: (initialData as any).colorTheme || 'default'
       });
       setLogoPreview(initialData.logo);
     }
@@ -160,6 +171,22 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
       reader.readAsDataURL(file);
     }
   };
+
+  // Watch theme changes and apply immediately
+  const watchedTheme = watch('theme');
+  const watchedColorTheme = watch('colorTheme');
+  
+  useEffect(() => {
+    if (watchedTheme) {
+      setTheme(watchedTheme as 'light' | 'dark' | 'system');
+    }
+  }, [watchedTheme, setTheme]);
+
+  useEffect(() => {
+    if (watchedColorTheme) {
+      setColorTheme(watchedColorTheme as 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle');
+    }
+  }, [watchedColorTheme, setColorTheme]);
 
   const handleFormSubmit = async (data: CompanySettingsFormData) => {
     try {
@@ -411,6 +438,34 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
               ))}
             </select>
           </FormField>
+        </div>
+      </Card>
+
+      {/* Appearance Settings */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Appearance Settings</h3>
+        <div className="space-y-6">
+          {/* Light/Dark Mode Selector */}
+          <FormField
+            label="Display Mode"
+            error={errors.theme?.message}
+          >
+            <select
+              {...register('theme')}
+              disabled={isLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-50 disabled:text-gray-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+            >
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">System (Auto)</option>
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              System mode automatically switches between light and dark based on your device settings
+            </p>
+          </FormField>
+
+          {/* Color Theme Selector */}
+          <ColorThemeSelector disabled={isLoading} />
         </div>
       </Card>
 

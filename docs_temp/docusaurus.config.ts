@@ -1,11 +1,11 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
+import { themes as prismThemes } from 'prism-react-renderer';
+import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Invoice Ninja Clone',
+  title: 'Billing Monk',
   tagline: 'Complete Invoice Management System Documentation',
   favicon: 'img/favicon.ico',
 
@@ -73,9 +73,9 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'Invoice Ninja Clone',
+      title: 'Billing Monk',
       logo: {
-        alt: 'Invoice Ninja Clone Logo',
+        alt: 'Billing Monk Logo',
         src: 'img/logo.svg',
       },
       items: [
@@ -165,7 +165,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Invoice Ninja Clone. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Billing Monk. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

@@ -1,6 +1,6 @@
 # Google Sheets Setup
 
-Google Sheets serves as the backend database for Invoice Ninja Clone. This guide walks you through setting up the Google Sheets integration, from creating the necessary sheets to configuring proper permissions.
+Google Sheets serves as the backend database for Billing Monk. This guide walks you through setting up the Google Sheets integration, from creating the necessary sheets to configuring proper permissions.
 
 ## Overview
 
@@ -44,7 +44,7 @@ The application includes an automatic setup wizard that creates the necessary Go
 ### What Gets Created Automatically
 
 The automatic setup creates:
-- **New Google Spreadsheet**: Named "Invoice Ninja Clone Data"
+- **New Google Spreadsheet**: Named "Billing Monk Data"
 - **Required Sheets**: All necessary sheets with proper column headers
 - **Permissions**: Service account granted editor access
 - **Initial Configuration**: Basic settings and structure
@@ -58,7 +58,7 @@ If you prefer manual setup or need to troubleshoot automatic setup:
 #### Create New Spreadsheet
 1. Go to [Google Sheets](https://sheets.google.com)
 2. Click "Blank" to create a new spreadsheet
-3. Rename it to "Invoice Ninja Clone Data" (or your preferred name)
+3. Rename it to "Billing Monk Data" (or your preferred name)
 4. Note the Spreadsheet ID from the URL
 
 #### Get Spreadsheet ID

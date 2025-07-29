@@ -1,6 +1,6 @@
 # OAuth Authentication
 
-Invoice Ninja Clone uses OAuth 2.0 for secure API authentication. This guide covers setting up OAuth authentication for API access, including both user authentication and service-to-service authentication.
+Billing Monk uses OAuth 2.0 for secure API authentication. This guide covers setting up OAuth authentication for API access, including both user authentication and service-to-service authentication.
 
 ## Overview
 

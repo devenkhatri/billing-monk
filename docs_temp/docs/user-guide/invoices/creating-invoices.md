@@ -1,6 +1,6 @@
 # Creating Invoices
 
-Creating professional invoices is at the heart of Invoice Ninja Clone. This comprehensive guide walks you through the invoice creation process, from basic invoices to advanced features.
+Creating professional invoices is at the heart of Billing Monk. This comprehensive guide walks you through the invoice creation process, from basic invoices to advanced features.
 
 ## Getting Started
 

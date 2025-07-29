@@ -602,6 +602,41 @@ We welcome contributions! Please read our contributing guidelines and submit pul
 
 This project is open source and available under the [MIT License](LICENSE).
 
+## Troubleshooting Common Issues
+
+### Google Sheets API Quota Exceeded
+
+If you encounter "Quota exceeded for quota metric 'Read requests'" errors, this is a common issue that can be resolved with the following steps:
+
+#### Understanding the Issue
+- Google Sheets API has rate limits: 100 requests per 100 seconds per user
+- The application was making too many API calls during initialization
+- Each read operation was triggering a full sheets initialization
+
+#### Solutions Implemented
+1. **Initialization Caching**: Sheets are now initialized only once per service instance
+2. **Request Batching**: Multiple header checks are batched together
+3. **Rate Limiting**: Built-in delays between API requests (100ms minimum)
+4. **Caching**: Frequently accessed data is cached for 30-60 seconds
+5. **Retry Logic**: Exponential backoff with jitter for rate limit errors
+
+#### Monitoring and Prevention
+- **Health Check**: Visit `/api/sheets/health` to check API status
+- **Settings Dashboard**: Monitor API status in the Settings page
+- **Error Handling**: Improved error messages and retry mechanisms
+
+#### If You Still Experience Issues
+1. **Wait**: Quota limits reset every minute - wait 1-2 minutes
+2. **Check Status**: Use the health check endpoint or Settings page
+3. **Reduce Frequency**: Avoid rapid successive operations
+4. **Contact Support**: If issues persist, check GitHub issues
+
+#### Best Practices
+- Avoid refreshing pages rapidly
+- Use the application's built-in navigation instead of browser refresh
+- Allow operations to complete before starting new ones
+- Monitor the API status in Settings page
+
 ## Support
 
 - **Documentation**: `/docs` directory

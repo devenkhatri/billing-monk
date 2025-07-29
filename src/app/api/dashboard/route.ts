@@ -19,10 +19,14 @@ export async function GET(request: NextRequest) {
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     
     // Fetch all data needed for dashboard metrics
-    const [clients, invoices, payments] = await Promise.all([
+    const [clients, invoices, payments, projects, tasks, timeEntries, templates] = await Promise.all([
       sheetsService.getClients(),
       sheetsService.getInvoices(),
-      sheetsService.getPayments()
+      sheetsService.getPayments(),
+      sheetsService.getProjects(),
+      sheetsService.getTasks(),
+      sheetsService.getTimeEntries(),
+      sheetsService.getTemplates()
     ]);
 
     // Filter data by date range if provided
@@ -71,7 +75,7 @@ export async function GET(request: NextRequest) {
       return invoice.status !== 'paid' && invoice.status !== 'cancelled' && dueDate < now;
     }).length;
 
-    // Generate recent activity
+    // Generate comprehensive recent activity
     const recentActivity: ActivityItem[] = [];
     
     // Add recent invoices
@@ -82,12 +86,27 @@ export async function GET(request: NextRequest) {
     recentInvoices.forEach(invoice => {
       const client = clients.find(c => c.id === invoice.clientId);
       recentActivity.push({
-        id: `invoice-${invoice.id}`,
+        id: `invoice-created-${invoice.id}`,
         type: 'invoice_created',
         description: `Invoice ${invoice.invoiceNumber} created for ${client?.name || 'Unknown Client'}`,
         timestamp: invoice.createdAt,
-        relatedId: invoice.id
+        relatedId: invoice.id,
+        entityType: 'invoice',
+        amount: invoice.total
       });
+
+      // Add invoice status changes
+      if (invoice.status === 'paid') {
+        recentActivity.push({
+          id: `invoice-paid-${invoice.id}`,
+          type: 'invoice_paid',
+          description: `Invoice ${invoice.invoiceNumber} marked as paid`,
+          timestamp: invoice.updatedAt,
+          relatedId: invoice.id,
+          entityType: 'invoice',
+          amount: invoice.total
+        });
+      }
     });
 
     // Add recent payments
@@ -107,9 +126,119 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    // Add recent clients
+    const recentClients = clients
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+    
+    recentClients.forEach(client => {
+      recentActivity.push({
+        id: `client-${client.id}`,
+        type: 'client_added',
+        description: `New client "${client.name}" added`,
+        timestamp: client.createdAt,
+        relatedId: client.id,
+        entityType: 'client'
+      });
+    });
+
+    // Add recent projects
+    const recentProjects = projects
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+    
+    recentProjects.forEach(project => {
+      const client = clients.find(c => c.id === project.clientId);
+      recentActivity.push({
+        id: `project-created-${project.id}`,
+        type: 'project_created',
+        description: `Project "${project.name}" created for ${client?.name || 'Unknown Client'}`,
+        timestamp: project.createdAt,
+        relatedId: project.id,
+        entityType: 'project'
+      });
+
+      // Add project completion
+      if (project.status === 'completed') {
+        recentActivity.push({
+          id: `project-completed-${project.id}`,
+          type: 'project_completed',
+          description: `Project "${project.name}" marked as completed`,
+          timestamp: project.updatedAt,
+          relatedId: project.id,
+          entityType: 'project'
+        });
+      }
+    });
+
+    // Add recent tasks
+    const recentTasks = tasks
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8);
+    
+    recentTasks.forEach(task => {
+      const project = projects.find(p => p.id === task.projectId);
+      recentActivity.push({
+        id: `task-created-${task.id}`,
+        type: 'task_created',
+        description: `Task "${task.title}" created in project "${project?.name || 'Unknown Project'}"`,
+        timestamp: task.createdAt,
+        relatedId: task.id,
+        entityType: 'task'
+      });
+
+      // Add task completion
+      if (task.status === 'completed') {
+        recentActivity.push({
+          id: `task-completed-${task.id}`,
+          type: 'task_completed',
+          description: `Task "${task.title}" marked as completed`,
+          timestamp: task.updatedAt,
+          relatedId: task.id,
+          entityType: 'task'
+        });
+      }
+    });
+
+    // Add recent time entries
+    const recentTimeEntries = timeEntries
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8);
+    
+    recentTimeEntries.forEach(timeEntry => {
+      const task = tasks.find(t => t.id === timeEntry.taskId);
+      const project = task ? projects.find(p => p.id === task.projectId) : null;
+      const hours = (timeEntry.duration / 3600).toFixed(1);
+      
+      recentActivity.push({
+        id: `time-entry-${timeEntry.id}`,
+        type: 'time_entry_created',
+        description: `${hours}h logged for task "${task?.title || 'Unknown Task'}" in "${project?.name || 'Unknown Project'}"`,
+        timestamp: timeEntry.createdAt,
+        relatedId: timeEntry.id,
+        entityType: 'time_entry'
+      });
+    });
+
+    // Add recent templates
+    const recentTemplates = templates
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+    
+    recentTemplates.forEach(template => {
+      recentActivity.push({
+        id: `template-${template.id}`,
+        type: 'template_created',
+        description: `Invoice template "${template.name}" created`,
+        timestamp: template.createdAt,
+        relatedId: template.id,
+        entityType: 'template'
+      });
+    });
+
     // Sort and limit recent activity
     recentActivity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    const limitedActivity = recentActivity.slice(0, 10);
+    const limitedActivity = recentActivity.slice(0, 15);
 
     const metrics: DashboardMetrics = {
       totalRevenue,

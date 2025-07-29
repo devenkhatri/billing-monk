@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { NotificationProvider } from "@/lib/notification-context";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
+import { ThemeProvider } from "@/lib/theme-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Invoice Ninja Clone",
+  title: "Billing Monk",
   description: "A comprehensive invoice management system",
 };
 
@@ -34,11 +35,13 @@ export default function RootLayout({
           Skip to main content
         </a>
         <ErrorBoundary>
-          <NotificationProvider>
-            <KeyboardShortcutsProvider>
-              {children}
-            </KeyboardShortcutsProvider>
-          </NotificationProvider>
+          <ThemeProvider>
+            <NotificationProvider>
+              <KeyboardShortcutsProvider>
+                {children}
+              </KeyboardShortcutsProvider>
+            </NotificationProvider>
+          </ThemeProvider>
         </ErrorBoundary>
       </body>
     </html>

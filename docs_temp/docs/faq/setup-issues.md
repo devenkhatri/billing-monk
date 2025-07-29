@@ -1,6 +1,6 @@
 # Setup Issues FAQ
 
-This section addresses common problems encountered during the initial setup and installation of Invoice Ninja Clone.
+This section addresses common problems encountered during the initial setup and installation of Billing Monk.
 
 ## Google Cloud Console Issues
 

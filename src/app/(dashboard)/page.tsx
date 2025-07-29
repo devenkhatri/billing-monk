@@ -1,11 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { RevenueChart } from '@/components/charts/revenue-chart';
 import { InvoiceStatusChart } from '@/components/charts/invoice-status-chart';
+import dynamic from 'next/dynamic';
+import { SkeletonCard } from '@/components/ui/skeleton';
+
+// Lazy load dashboard widgets for better performance
+const ProjectOverviewWidget = dynamic(
+  () => import('@/components/dashboard/project-overview-widget').then(mod => ({ default: mod.ProjectOverviewWidget })),
+  { loading: () => <SkeletonCard /> }
+);
+
+const TaskSummaryWidget = dynamic(
+  () => import('@/components/dashboard/task-summary-widget').then(mod => ({ default: mod.TaskSummaryWidget })),
+  { loading: () => <SkeletonCard /> }
+);
+
+const TimeTrackingWidget = dynamic(
+  () => import('@/components/dashboard/time-tracking-widget').then(mod => ({ default: mod.TimeTrackingWidget })),
+  { loading: () => <SkeletonCard /> }
+);
+
+const UpcomingDeadlinesWidget = dynamic(
+  () => import('@/components/dashboard/upcoming-deadlines-widget').then(mod => ({ default: mod.UpcomingDeadlinesWidget })),
+  { loading: () => <SkeletonCard /> }
+);
+
+const ProjectProgressWidget = dynamic(
+  () => import('@/components/dashboard/project-progress-widget').then(mod => ({ default: mod.ProjectProgressWidget })),
+  { loading: () => <SkeletonCard /> }
+);
 import { 
   PlusIcon, 
   CalendarIcon, 
@@ -14,10 +42,14 @@ import {
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
-  ClockIcon
+  ClockIcon,
+  FolderIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { DashboardMetrics } from '@/types';
 import { format } from 'date-fns';
+import { cachedFetch } from '@/lib/cache';
+import { measurePerformance } from '@/lib/performance';
 import Link from 'next/link';
 
 export default function DashboardPage() {
@@ -26,15 +58,17 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
 
-  const fetchDashboardData = async (dateFrom?: string, dateTo?: string) => {
+  const fetchDashboardData = useCallback(async (dateFrom?: string, dateTo?: string) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
       
-      const response = await fetch(`/api/dashboard?${params.toString()}`);
-      const data = await response.json();
+      const data = await measurePerformance(
+        'Dashboard Data Fetch',
+        () => cachedFetch(`/api/dashboard?${params.toString()}`, undefined, 1 * 60 * 1000)
+      );
       
       if (data.success) {
         setMetrics(data.data);
@@ -48,13 +82,13 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDateRangeChange = (dateFrom?: string, dateTo?: string) => {
+  const handleDateRangeChange = useCallback((dateFrom?: string, dateTo?: string) => {
     if (dateFrom && dateTo) {
       setDateRange({ from: dateFrom, to: dateTo });
       fetchDashboardData(dateFrom, dateTo);
@@ -62,10 +96,10 @@ export default function DashboardPage() {
       setDateRange({ from: '', to: '' });
       fetchDashboardData();
     }
-  };
+  }, [fetchDashboardData]);
 
-  // Generate chart data from metrics
-  const generateRevenueChartData = () => {
+  // Generate chart data from metrics - memoized to prevent unnecessary recalculations
+  const revenueChartData = useMemo(() => {
     if (!metrics) return [];
     
     // For demo purposes, generate last 6 months of data
@@ -80,9 +114,9 @@ export default function DashboardPage() {
       });
     }
     return months;
-  };
+  }, [metrics]);
 
-  const generateInvoiceStatusData = () => {
+  const invoiceStatusData = useMemo(() => {
     if (!metrics) return [];
     
     return [
@@ -90,7 +124,7 @@ export default function DashboardPage() {
       { status: 'sent', count: metrics.totalInvoices - metrics.paidInvoices - metrics.overdueInvoices, amount: metrics.outstandingAmount },
       { status: 'overdue', count: metrics.overdueInvoices, amount: metrics.overdueAmount },
     ].filter(item => item.count > 0);
-  };
+  }, [metrics]);
 
   if (loading) {
     return (
@@ -220,7 +254,7 @@ export default function DashboardPage() {
               <h2 className="text-lg font-medium text-gray-900">Revenue Trend</h2>
               <ArrowTrendingUpIcon className="h-5 w-5 text-gray-400" />
             </div>
-            <RevenueChart data={generateRevenueChartData()} />
+            <RevenueChart data={revenueChartData} />
           </CardContent>
         </Card>
 
@@ -230,9 +264,22 @@ export default function DashboardPage() {
               <h2 className="text-lg font-medium text-gray-900">Invoice Status</h2>
               <DocumentTextIcon className="h-5 w-5 text-gray-400" />
             </div>
-            <InvoiceStatusChart data={generateInvoiceStatusData()} />
+            <InvoiceStatusChart data={invoiceStatusData} />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Project and Task Management Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+        <ProjectOverviewWidget />
+        <TaskSummaryWidget />
+        <TimeTrackingWidget />
+      </div>
+
+      {/* Additional Project and Task Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <UpcomingDeadlinesWidget />
+        <ProjectProgressWidget />
       </div>
 
       {/* Quick Actions and Recent Activity */}
@@ -240,7 +287,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">Quick Actions</h2>
             </div>
             <div className="space-y-2">
               <Link href="/invoices">
@@ -253,6 +300,18 @@ export default function DashboardPage() {
                 <Button variant="outline" size="sm" className="w-full justify-start">
                   <UserGroupIcon className="h-4 w-4 mr-2" />
                   Add Client
+                </Button>
+              </Link>
+              <Link href="/projects">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  <FolderIcon className="h-4 w-4 mr-2" />
+                  Create Project
+                </Button>
+              </Link>
+              <Link href="/tasks">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  <CheckCircleIcon className="h-4 w-4 mr-2" />
+                  Create Task
                 </Button>
               </Link>
               <Link href="/payments">
@@ -276,33 +335,80 @@ export default function DashboardPage() {
 
         <Card className="lg:col-span-2">
           <CardContent>
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Recent Activity</h2>
             {metrics?.recentActivity && metrics.recentActivity.length > 0 ? (
               <div className="space-y-3">
-                {metrics.recentActivity.slice(0, 8).map((activity) => (
+                {metrics.recentActivity.slice(0, 12).map((activity) => (
                   <div key={activity.id} className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
-                      {activity.type === 'invoice_created' && (
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <DocumentTextIcon className="w-4 h-4 text-blue-600" />
+                      {(activity.type === 'invoice_created' || activity.type === 'invoice_updated') && (
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         </div>
                       )}
-                      {activity.type === 'payment_received' && (
-                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                          <CurrencyDollarIcon className="w-4 h-4 text-green-600" />
+                      {activity.type === 'invoice_paid' && (
+                        <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
                         </div>
                       )}
-                      {activity.type === 'client_added' && (
-                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                          <UserGroupIcon className="w-4 h-4 text-purple-600" />
+                      {(activity.type === 'payment_received' || activity.type === 'payment_updated') && (
+                        <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                          <CurrencyDollarIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        </div>
+                      )}
+                      {(activity.type === 'client_added' || activity.type === 'client_updated') && (
+                        <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
+                          <UserGroupIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        </div>
+                      )}
+                      {(activity.type === 'project_created' || activity.type === 'project_updated') && (
+                        <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
+                          <FolderIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                      )}
+                      {activity.type === 'project_completed' && (
+                        <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        </div>
+                      )}
+                      {(activity.type === 'task_created' || activity.type === 'task_updated') && (
+                        <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                        </div>
+                      )}
+                      {activity.type === 'task_completed' && (
+                        <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                        </div>
+                      )}
+                      {(activity.type === 'time_entry_created' || activity.type === 'time_entry_updated') && (
+                        <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center">
+                          <ClockIcon className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                        </div>
+                      )}
+                      {(activity.type === 'template_created' || activity.type === 'template_updated') && (
+                        <div className="w-8 h-8 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+                        </div>
+                      )}
+                      {activity.type === 'settings_updated' && (
+                        <div className="w-8 h-8 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center">
+                          <ExclamationTriangleIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.description}</p>
-                      <p className="text-xs text-gray-500">
-                        {format(new Date(activity.timestamp), 'MMM d, yyyy h:mm a')}
-                      </p>
+                      <p className="text-sm text-gray-900 dark:text-gray-100">{activity.description}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {format(new Date(activity.timestamp), 'MMM d, yyyy h:mm a')}
+                        </p>
+                        {activity.amount && (
+                          <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                            ${activity.amount.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -310,8 +416,8 @@ export default function DashboardPage() {
             ) : (
               <div className="text-center py-8">
                 <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No recent activity</h3>
-                <p className="mt-1 text-sm text-gray-500">Get started by creating your first invoice.</p>
+                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No recent activity</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating your first invoice.</p>
                 <div className="mt-6">
                   <Link href="/invoices">
                     <Button>

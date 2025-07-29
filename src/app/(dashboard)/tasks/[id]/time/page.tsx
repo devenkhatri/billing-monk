@@ -26,7 +26,7 @@ export default function TaskTimeTrackingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+
   // Timer state
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerStart, setTimerStart] = useState<Date | null>(null);
@@ -34,12 +34,12 @@ export default function TaskTimeTrackingPage() {
 
   useEffect(() => {
     fetchData();
-  }, [taskId]);
+  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    
+
     if (isTimerRunning && timerStart) {
       interval = setInterval(() => {
         setElapsedTime(Math.floor((Date.now() - timerStart.getTime()) / 1000));
@@ -76,7 +76,7 @@ export default function TaskTimeTrackingPage() {
         // Fetch project data
         const projectResponse = await fetch(`/api/projects/${taskWithDates.projectId}`);
         const projectData: ApiResponse<Project> = await projectResponse.json();
-        
+
         if (projectData.success) {
           setProject({
             ...projectData.data,
@@ -132,7 +132,7 @@ export default function TaskTimeTrackingPage() {
           taskId: task.id,
           startTime: timerStart.toISOString(),
           endTime: endTime.toISOString(),
-          duration,
+          duration: duration * 60, // Convert minutes to seconds for consistency
           isBillable: task.isBillable,
           hourlyRate: project?.hourlyRate
         })
@@ -151,7 +151,7 @@ export default function TaskTimeTrackingPage() {
 
         setTimeEntries(prev => [timeEntryWithDates, ...prev]);
         setSuccess(`Time entry created: ${(duration / 60).toFixed(1)} hours`);
-        
+
         // Refresh task data to get updated hours
         fetchData();
       } else {
@@ -192,7 +192,7 @@ export default function TaskTimeTrackingPage() {
       if (data.success) {
         setTimeEntries(prev => prev.filter(t => t.id !== timeEntry.id));
         setSuccess('Time entry deleted successfully');
-        
+
         // Refresh task data to get updated hours
         fetchData();
       } else {
@@ -205,6 +205,11 @@ export default function TaskTimeTrackingPage() {
   };
 
   const handleFormSubmit = async (formData: TimeEntryFormData) => {
+    if (!task) {
+      setError('Task not found');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -212,12 +217,15 @@ export default function TaskTimeTrackingPage() {
       const url = editingTimeEntry ? `/api/time-entries/${editingTimeEntry.id}` : '/api/time-entries';
       const method = editingTimeEntry ? 'PUT' : 'POST';
 
+      // Include taskId in the request body for both new entries and updates
+      const requestBody = { ...formData, taskId: task.id };
+
       const response = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(requestBody)
       });
 
       const data: ApiResponse<TimeEntry> = await response.json();
@@ -241,7 +249,7 @@ export default function TaskTimeTrackingPage() {
 
         setIsFormOpen(false);
         setEditingTimeEntry(null);
-        
+
         // Refresh task data to get updated hours
         fetchData();
       } else {
@@ -376,7 +384,7 @@ export default function TaskTimeTrackingPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-purple-600">
-              {project?.hourlyRate && billableHours > 0 
+              {project?.hourlyRate && billableHours > 0
                 ? formatCurrency(project.hourlyRate * billableHours)
                 : '-'
               }

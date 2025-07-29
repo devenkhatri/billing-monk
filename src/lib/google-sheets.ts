@@ -50,16 +50,29 @@ interface RetryConfig {
 }
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: 3,
-  baseDelay: 1000, // 1 second
-  maxDelay: 10000, // 10 seconds
+  maxRetries: 5, // Increased retries for quota issues
+  baseDelay: 2000, // 2 seconds - longer initial delay
+  maxDelay: 30000, // 30 seconds - longer max delay for quota issues
   backoffMultiplier: 2
 };
+
+// Simple cache interface
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number; // Time to live in milliseconds
+}
 
 export class GoogleSheetsService {
   private sheets: sheets_v4.Sheets;
   private spreadsheetId: string;
   private retryConfig: RetryConfig;
+  private isInitialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
+  private cache: Map<string, CacheEntry<any>> = new Map();
+  private readonly DEFAULT_CACHE_TTL = 30000; // 30 seconds
+  private lastRequestTime: number = 0;
+  private readonly MIN_REQUEST_INTERVAL = 100; // 100ms between requests
 
   constructor(accessToken: string, spreadsheetId: string, retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG) {
     const auth = new google.auth.OAuth2();
@@ -68,6 +81,15 @@ export class GoogleSheetsService {
     this.sheets = google.sheets({ version: 'v4', auth });
     this.spreadsheetId = spreadsheetId;
     this.retryConfig = retryConfig;
+  }
+
+  // Getter methods for health checks and monitoring
+  get sheetsClient() {
+    return this.sheets;
+  }
+
+  get spreadsheetIdValue() {
+    return this.spreadsheetId;
   }
 
   /**
@@ -107,6 +129,12 @@ export class GoogleSheetsService {
       service.sheets = sheets;
       service.spreadsheetId = spreadsheetId;
       service.retryConfig = retryConfig;
+      service.isInitialized = false;
+      service.initializationPromise = null;
+      service.cache = new Map();
+      service.DEFAULT_CACHE_TTL = 30000;
+      service.lastRequestTime = 0;
+      service.MIN_REQUEST_INTERVAL = 100;
 
       return service;
     } catch (error) {
@@ -115,6 +143,77 @@ export class GoogleSheetsService {
         `Failed to authenticate with Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
+  }
+
+  /**
+   * Ensures sheets are initialized only once per service instance
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this.initializeSheets().then(() => {
+      this.isInitialized = true;
+    });
+
+    return this.initializationPromise;
+  }
+
+  /**
+   * Cache helper methods
+   */
+  private getCachedData<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    
+    const now = Date.now();
+    if (now - entry.timestamp > entry.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return entry.data;
+  }
+
+  private setCachedData<T>(key: string, data: T, ttl: number = this.DEFAULT_CACHE_TTL): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl
+    });
+  }
+
+  private clearCache(pattern?: string): void {
+    if (!pattern) {
+      this.cache.clear();
+      return;
+    }
+    
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Rate limiting to prevent quota exceeded errors
+   */
+  private async rateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
+      const delay = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    this.lastRequestTime = Date.now();
   }
 
   /**
@@ -130,6 +229,8 @@ export class GoogleSheetsService {
 
     while (attempt <= this.retryConfig.maxRetries) {
       try {
+        // Apply rate limiting before each request
+        await this.rateLimit();
         return await operation();
       } catch (error: any) {
         lastError = error;
@@ -143,11 +244,16 @@ export class GoogleSheetsService {
           throw parsedError;
         }
 
-        // Calculate delay with exponential backoff
-        const delay = Math.min(
+        // Calculate delay with exponential backoff and jitter for rate limit errors
+        let delay = Math.min(
           this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt - 1),
           this.retryConfig.maxDelay
         );
+
+        // Add jitter and longer delay for rate limit errors
+        if (parsedError instanceof RateLimitError) {
+          delay = delay * (1.5 + Math.random() * 0.5); // 1.5x to 2x delay with jitter
+        }
 
         console.warn(`${operationName} failed (attempt ${attempt}/${this.retryConfig.maxRetries + 1}), retrying in ${delay}ms:`, parsedError.message);
         
@@ -173,7 +279,7 @@ export class GoogleSheetsService {
     }
 
     // Rate limiting errors
-    if (statusCode === 429 || message.includes('rate limit') || message.includes('quota exceeded')) {
+    if (statusCode === 429 || message.includes('rate limit') || message.includes('quota exceeded') || message.includes('Quota exceeded')) {
       return new RateLimitError(`Rate limit exceeded during ${operationName}: ${message}`);
     }
 
@@ -213,6 +319,9 @@ export class GoogleSheetsService {
 
   async getClients(): Promise<Client[]> {
     return this.executeWithRetry(async () => {
+      // Ensure sheets exist before reading
+      await this.ensureInitialized();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Clients!A2:K'
@@ -386,6 +495,9 @@ export class GoogleSheetsService {
   // Invoice methods
   async getInvoices(): Promise<Invoice[]> {
     try {
+      // Ensure sheets exist before reading
+      await this.ensureInitialized();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Invoices!A2:T'
@@ -796,6 +908,9 @@ export class GoogleSheetsService {
   // Payment methods
   async getPayments(invoiceId?: string): Promise<Payment[]> {
     try {
+      // Ensure sheets exist before reading
+      await this.ensureInitialized();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Payments!A2:G'
@@ -955,6 +1070,16 @@ export class GoogleSheetsService {
   // Company Settings methods
   async getCompanySettings(): Promise<CompanySettings | null> {
     try {
+      // Check cache first
+      const cacheKey = 'company_settings';
+      const cachedSettings = this.getCachedData<CompanySettings>(cacheKey);
+      if (cachedSettings) {
+        return cachedSettings;
+      }
+
+      // Ensure Settings sheet exists before reading
+      await this.ensureInitialized();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Settings!A2:B'
@@ -969,29 +1094,34 @@ export class GoogleSheetsService {
         }
       });
 
+      let settings: CompanySettings;
       if (settingsMap.size === 0) {
-        return this.getDefaultCompanySettings();
+        settings = this.getDefaultCompanySettings();
+      } else {
+        settings = {
+          name: settingsMap.get('company_name') || 'Your Company',
+          email: settingsMap.get('company_email') || '',
+          phone: settingsMap.get('company_phone') || undefined,
+          address: {
+            street: settingsMap.get('company_street') || '',
+            city: settingsMap.get('company_city') || '',
+            state: settingsMap.get('company_state') || '',
+            zipCode: settingsMap.get('company_zip') || '',
+            country: settingsMap.get('company_country') || ''
+          },
+          logo: settingsMap.get('company_logo') || undefined,
+          taxRate: parseFloat(settingsMap.get('tax_rate') || '0'),
+          paymentTerms: parseInt(settingsMap.get('payment_terms') || '30'),
+          invoiceTemplate: settingsMap.get('invoice_template') || 'default',
+          currency: settingsMap.get('currency') || 'USD',
+          dateFormat: settingsMap.get('date_format') || 'MM/dd/yyyy',
+          timeZone: settingsMap.get('time_zone') || 'America/New_York'
+        };
       }
 
-      return {
-        name: settingsMap.get('company_name') || 'Your Company',
-        email: settingsMap.get('company_email') || '',
-        phone: settingsMap.get('company_phone') || undefined,
-        address: {
-          street: settingsMap.get('company_street') || '',
-          city: settingsMap.get('company_city') || '',
-          state: settingsMap.get('company_state') || '',
-          zipCode: settingsMap.get('company_zip') || '',
-          country: settingsMap.get('company_country') || ''
-        },
-        logo: settingsMap.get('company_logo') || undefined,
-        taxRate: parseFloat(settingsMap.get('tax_rate') || '0'),
-        paymentTerms: parseInt(settingsMap.get('payment_terms') || '30'),
-        invoiceTemplate: settingsMap.get('invoice_template') || 'default',
-        currency: settingsMap.get('currency') || 'USD',
-        dateFormat: settingsMap.get('date_format') || 'MM/dd/yyyy',
-        timeZone: settingsMap.get('time_zone') || 'America/New_York'
-      };
+      // Cache the settings for 60 seconds (longer TTL for settings)
+      this.setCachedData(cacheKey, settings, 60000);
+      return settings;
     } catch (error) {
       console.error('Error getting company settings:', error);
       return this.getDefaultCompanySettings();
@@ -1031,6 +1161,9 @@ export class GoogleSheetsService {
           values: settingsData
         }
       });
+
+      // Clear the cache after updating settings
+      this.clearCache('company_settings');
 
       return settings;
     } catch (error) {
@@ -1578,6 +1711,9 @@ export class GoogleSheetsService {
   // Project methods
   async getProjects(): Promise<Project[]> {
     try {
+      // Ensure project sheets exist before reading
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Projects!A2:L'
@@ -1594,6 +1730,9 @@ export class GoogleSheetsService {
 
   async createProject(projectData: CreateProjectData): Promise<Project> {
     return this.executeWithRetry(async () => {
+      // Ensure project sheets exist before creating project
+      await this.ensureTaskAndProjectSheets();
+      
       const project: Project = {
         id: this.generateId(),
         ...projectData,
@@ -1626,6 +1765,9 @@ export class GoogleSheetsService {
 
   async updateProject(id: string, updates: UpdateProjectData): Promise<Project | null> {
     try {
+      // Ensure project sheets exist before updating
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Projects!A2:L'
@@ -1711,6 +1853,9 @@ export class GoogleSheetsService {
   // Task methods
   async getTasks(): Promise<Task[]> {
     try {
+      // Ensure task sheets exist before reading
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Tasks!A2:O'
@@ -1737,6 +1882,9 @@ export class GoogleSheetsService {
 
   async createTask(taskData: CreateTaskData): Promise<Task> {
     return this.executeWithRetry(async () => {
+      // Ensure task sheets exist before creating task
+      await this.ensureTaskAndProjectSheets();
+      
       const task: Task = {
         id: this.generateId(),
         ...taskData,
@@ -1771,6 +1919,9 @@ export class GoogleSheetsService {
 
   async updateTask(id: string, updates: UpdateTaskData): Promise<Task | null> {
     try {
+      // Ensure task sheets exist before updating
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Tasks!A2:O'
@@ -1856,6 +2007,9 @@ export class GoogleSheetsService {
   // Time Entry methods
   async getTimeEntries(): Promise<TimeEntry[]> {
     try {
+      // Ensure time entry sheets exist before reading
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'TimeEntries!A2:K'
@@ -1882,6 +2036,9 @@ export class GoogleSheetsService {
 
   async createTimeEntry(timeEntryData: CreateTimeEntryData): Promise<TimeEntry> {
     return this.executeWithRetry(async () => {
+      // Ensure time entry sheets exist before creating time entry
+      await this.ensureTaskAndProjectSheets();
+      
       const timeEntry: TimeEntry = {
         id: this.generateId(),
         ...timeEntryData,
@@ -1907,6 +2064,9 @@ export class GoogleSheetsService {
 
   async updateTimeEntry(id: string, updates: UpdateTimeEntryData): Promise<TimeEntry | null> {
     try {
+      // Ensure time entry sheets exist before updating
+      await this.ensureTaskAndProjectSheets();
+      
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'TimeEntries!A2:K'
@@ -2193,19 +2353,32 @@ export class GoogleSheetsService {
         console.log(`Created sheets: ${sheetsToCreate.map(s => s.name).join(', ')}`);
       }
 
-      // Add headers to all sheets
-      for (const sheet of requiredSheets) {
+      // Batch check headers for all sheets to reduce API calls
+      const headerCheckPromises = requiredSheets.map(async (sheet) => {
         try {
-          // Check if headers already exist
           const existingData = await this.sheets.spreadsheets.values.get({
             spreadsheetId: this.spreadsheetId,
             range: `${sheet.name}!A1:Z1`
           });
 
-          // If no data or headers don't match, add/update headers
-          if (!existingData.data.values || existingData.data.values.length === 0 || 
-              !this.arraysEqual(existingData.data.values[0], sheet.headers)) {
-            
+          const needsUpdate = !existingData.data.values || 
+                             existingData.data.values.length === 0 || 
+                             !this.arraysEqual(existingData.data.values[0], sheet.headers);
+
+          return { sheet, needsUpdate };
+        } catch (error) {
+          console.warn(`Could not check headers for sheet ${sheet.name}:`, error);
+          return { sheet, needsUpdate: true };
+        }
+      });
+
+      const headerCheckResults = await Promise.all(headerCheckPromises);
+      
+      // Batch update headers for sheets that need it
+      const updatePromises = headerCheckResults
+        .filter(result => result.needsUpdate)
+        .map(async ({ sheet }) => {
+          try {
             await this.sheets.spreadsheets.values.update({
               spreadsheetId: this.spreadsheetId,
               range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
@@ -2214,13 +2387,13 @@ export class GoogleSheetsService {
                 values: [sheet.headers]
               }
             });
-
             console.log(`Updated headers for sheet: ${sheet.name}`);
+          } catch (error) {
+            console.warn(`Could not update headers for sheet ${sheet.name}:`, error);
           }
-        } catch (error) {
-          console.warn(`Could not update headers for sheet ${sheet.name}:`, error);
-        }
-      }
+        });
+
+      await Promise.all(updatePromises);
 
       // Add some default settings if Settings sheet is empty
       try {
@@ -2296,5 +2469,235 @@ export class GoogleSheetsService {
       });
       return response.data;
     }, 'getSpreadsheetInfo');
+  }
+
+  // App Settings methods
+  async getAppSettings(): Promise<AppSettings | null> {
+    try {
+      // Ensure AppSettings sheet exists before reading
+      await this.ensureAppSettingsSheet();
+      
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AppSettings!A2:B'
+      });
+
+      const rows = response.data.values || [];
+      const settingsMap = new Map<string, string>();
+      
+      rows.forEach(row => {
+        if (row[0] && row[1]) {
+          settingsMap.set(row[0], row[1]);
+        }
+      });
+
+      if (settingsMap.size === 0) {
+        return this.getDefaultAppSettings();
+      }
+
+      return {
+        googleSheetsId: settingsMap.get('google_sheets_id') || undefined,
+        isSetupComplete: settingsMap.get('is_setup_complete') === 'true',
+        lastBackup: settingsMap.get('last_backup') ? this.parseDate(settingsMap.get('last_backup')!) : undefined,
+        autoBackup: settingsMap.get('auto_backup') === 'true',
+        backupFrequency: (settingsMap.get('backup_frequency') as 'daily' | 'weekly' | 'monthly') || 'weekly',
+        theme: (settingsMap.get('theme') as 'light' | 'dark' | 'system') || 'light',
+        colorTheme: (settingsMap.get('color_theme') as 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle') || 'default'
+      };
+    } catch (error) {
+      console.error('Error getting app settings:', error);
+      return this.getDefaultAppSettings();
+    }
+  }
+
+  async updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+    try {
+      // Ensure AppSettings sheet exists
+      await this.ensureAppSettingsSheet();
+
+      const settingsData = [
+        ['google_sheets_id', settings.googleSheetsId || ''],
+        ['is_setup_complete', settings.isSetupComplete.toString()],
+        ['last_backup', settings.lastBackup?.toISOString() || ''],
+        ['auto_backup', settings.autoBackup.toString()],
+        ['backup_frequency', settings.backupFrequency],
+        ['theme', settings.theme],
+        ['color_theme', settings.colorTheme]
+      ];
+
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AppSettings!A2:B'
+      });
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'AppSettings!A2:B',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: settingsData
+        }
+      });
+
+      return settings;
+    } catch (error) {
+      console.error('Error updating app settings:', error);
+      throw error;
+    }
+  }
+
+  private getDefaultAppSettings(): AppSettings {
+    return {
+      isSetupComplete: false,
+      autoBackup: true,
+      backupFrequency: 'weekly',
+      theme: 'light',
+      colorTheme: 'default'
+    };
+  }
+
+  private async ensureAppSettingsSheet(): Promise<void> {
+    try {
+      // Get current spreadsheet info
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+
+      const existingSheets = spreadsheetInfo.data.sheets?.map(sheet => sheet.properties?.title) || [];
+      
+      // Create AppSettings sheet if it doesn't exist
+      if (!existingSheets.includes('AppSettings')) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: 'AppSettings'
+                }
+              }
+            }]
+          }
+        });
+
+        console.log('Created AppSettings sheet');
+      }
+
+      // Add headers to AppSettings sheet
+      try {
+        const headers = ['Setting', 'Value'];
+        
+        // Check if headers already exist
+        const existingData = await this.sheets.spreadsheets.values.get({
+          spreadsheetId: this.spreadsheetId,
+          range: 'AppSettings!A1:B1'
+        });
+
+        // If no data or headers don't match, add/update headers
+        if (!existingData.data.values || existingData.data.values.length === 0 || 
+            !this.arraysEqual(existingData.data.values[0], headers)) {
+          
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.spreadsheetId,
+            range: 'AppSettings!A1:B1',
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: [headers]
+            }
+          });
+
+          console.log('Updated headers for AppSettings sheet');
+        }
+      } catch (error) {
+        console.error('Error setting up AppSettings sheet headers:', error);
+      }
+    } catch (error) {
+      console.error('Error ensuring AppSettings sheet:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure task and project sheets exist and have correct headers
+   */
+  private async ensureTaskAndProjectSheets(): Promise<void> {
+    try {
+      // Get current spreadsheet info
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+
+      const existingSheets = spreadsheetInfo.data.sheets?.map(sheet => sheet.properties?.title) || [];
+      
+      // Define task and project sheets
+      const taskProjectSheets = [
+        {
+          name: 'Projects',
+          headers: ['ID', 'Name', 'Description', 'ClientID', 'Status', 'StartDate', 'EndDate', 'Budget', 'HourlyRate', 'IsActive', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'Tasks',
+          headers: ['ID', 'ProjectID', 'Title', 'Description', 'Status', 'Priority', 'AssignedTo', 'DueDate', 'EstimatedHours', 'ActualHours', 'BillableHours', 'IsBillable', 'Tags', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'TimeEntries',
+          headers: ['ID', 'TaskID', 'ProjectID', 'Description', 'StartTime', 'EndTime', 'Duration', 'IsBillable', 'HourlyRate', 'CreatedAt', 'UpdatedAt']
+        }
+      ];
+
+      // Create missing sheets
+      const sheetsToCreate = taskProjectSheets.filter(sheet => !existingSheets.includes(sheet.name));
+      
+      if (sheetsToCreate.length > 0) {
+        const requests = sheetsToCreate.map(sheet => ({
+          addSheet: {
+            properties: {
+              title: sheet.name
+            }
+          }
+        }));
+
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            requests
+          }
+        });
+
+        console.log(`Created task/project sheets: ${sheetsToCreate.map(s => s.name).join(', ')}`);
+      }
+
+      // Add headers to sheets
+      for (const sheet of taskProjectSheets) {
+        try {
+          // Check if headers already exist
+          const existingData = await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.spreadsheetId,
+            range: `${sheet.name}!A1:Z1`
+          });
+
+          // If no data or headers don't match, add/update headers
+          if (!existingData.data.values || existingData.data.values.length === 0 || 
+              !this.arraysEqual(existingData.data.values[0], sheet.headers)) {
+            
+            await this.sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
+              valueInputOption: 'RAW',
+              requestBody: {
+                values: [sheet.headers]
+              }
+            });
+
+            console.log(`Updated headers for ${sheet.name} sheet`);
+          }
+        } catch (error) {
+          console.error(`Error setting up ${sheet.name} sheet:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring task and project sheets:', error);
+      throw error;
+    }
   }
 }

@@ -1,6 +1,6 @@
 # Adding Clients
 
-Managing your client database is essential for effective invoicing. This guide walks you through adding new clients to your Invoice Ninja Clone system.
+Managing your client database is essential for effective invoicing. This guide walks you through adding new clients to your Billing Monk system.
 
 ## Accessing Client Management
 

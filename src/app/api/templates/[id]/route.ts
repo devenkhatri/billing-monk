@@ -20,8 +20,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    const template = await sheetsService.getTemplate(params.id);
+    const template = await sheetsService.getTemplate(id);
 
     if (!template) {
       throw new Error('Template not found');
@@ -39,6 +40,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const body = await request.json();
     
     // Validate request body
@@ -64,7 +66,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       isActive: result.data.isActive,
     };
 
-    const template = await sheetsService.updateTemplate(params.id, updateData);
+    const template = await sheetsService.updateTemplate(id, updateData);
     return template;
   }, 'update template');
 }
@@ -77,8 +79,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       throw new Error('Authentication required');
     }
 
+    const { id } = await params;
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
-    await sheetsService.deleteTemplate(params.id);
+    await sheetsService.deleteTemplate(id);
 
     return { message: 'Template deleted successfully' };
   }, 'delete template');

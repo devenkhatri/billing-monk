@@ -111,6 +111,61 @@ export interface Template {
   updatedAt: Date;
 }
 
+// Project interface
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  clientId: string;
+  status: ProjectStatus;
+  startDate: Date;
+  endDate?: Date;
+  budget?: number;
+  hourlyRate?: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Task interface
+export interface Task {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedTo?: string;
+  dueDate?: Date;
+  estimatedHours?: number;
+  actualHours: number;
+  billableHours: number;
+  isBillable: boolean;
+  tags?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Time Entry interface
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  projectId: string;
+  description?: string;
+  startTime: Date;
+  endTime?: Date;
+  duration: number; // in minutes
+  isBillable: boolean;
+  hourlyRate?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Enums for task management
+export type ProjectStatus = 'planning' | 'active' | 'on-hold' | 'completed' | 'cancelled';
+export type TaskStatus = 'todo' | 'in-progress' | 'review' | 'completed' | 'cancelled';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
 // Company settings interface
 export interface CompanySettings {
   name: string;
@@ -241,10 +296,46 @@ export interface InvoiceFormData {
   issueDate: string;
   dueDate: string;
   lineItems: LineItemFormData[];
+  taskIds?: string[]; // Tasks to include in invoice
   taxRate: number;
   notes?: string;
   isRecurring: boolean;
   recurringSchedule?: RecurringScheduleFormData;
+}
+
+export interface ProjectFormData {
+  name: string;
+  description?: string;
+  clientId: string;
+  status: ProjectStatus;
+  startDate: string;
+  endDate?: string;
+  budget?: number;
+  hourlyRate?: number;
+  isActive: boolean;
+}
+
+export interface TaskFormData {
+  projectId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedTo?: string;
+  dueDate?: string;
+  estimatedHours?: number;
+  isBillable: boolean;
+  tags?: string[];
+}
+
+export interface TimeEntryFormData {
+  taskId: string;
+  description?: string;
+  startTime: string;
+  endTime?: string;
+  duration?: number;
+  isBillable: boolean;
+  hourlyRate?: number;
 }
 
 export interface PaymentFormData {
@@ -300,6 +391,15 @@ export type UpdatePaymentData = Partial<Omit<Payment, 'id' | 'invoiceId' | 'crea
 
 export type CreateTemplateData = Omit<Template, 'id' | 'createdAt' | 'updatedAt'>;
 export type UpdateTemplateData = Partial<CreateTemplateData>;
+
+export type CreateProjectData = Omit<Project, 'id' | 'createdAt' | 'updatedAt'>;
+export type UpdateProjectData = Partial<CreateProjectData>;
+
+export type CreateTaskData = Omit<Task, 'id' | 'actualHours' | 'billableHours' | 'createdAt' | 'updatedAt'>;
+export type UpdateTaskData = Partial<CreateTaskData>;
+
+export type CreateTimeEntryData = Omit<TimeEntry, 'id' | 'createdAt' | 'updatedAt'>;
+export type UpdateTimeEntryData = Partial<CreateTimeEntryData>;
 
 // Dashboard analytics types
 export interface DashboardMetrics {

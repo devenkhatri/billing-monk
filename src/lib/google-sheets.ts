@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData, Project, CreateProjectData, UpdateProjectData, Task, CreateTaskData, UpdateTaskData, TimeEntry, CreateTimeEntryData, UpdateTimeEntryData, ProjectStatus, TaskStatus, TaskPriority } from '@/types';
 import { generateId } from './utils';
 
 // Error types for better error handling
@@ -1575,6 +1575,546 @@ export class GoogleSheetsService {
     }
   }
 
+  // Project methods
+  async getProjects(): Promise<Project[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Projects!A2:L'
+      });
+
+      const rows = response.data.values || [];
+      const projects = rows.map(row => this.rowToProject(row));
+      return projects;
+    } catch (error) {
+      console.error('Error getting projects:', error);
+      return [];
+    }
+  }
+
+  async createProject(projectData: CreateProjectData): Promise<Project> {
+    return this.executeWithRetry(async () => {
+      const project: Project = {
+        id: this.generateId(),
+        ...projectData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Projects!A:L',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.projectToRow(project)]
+        }
+      });
+
+      return project;
+    }, 'createProject');
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    try {
+      const projects = await this.getProjects();
+      return projects.find(project => project.id === id) || null;
+    } catch (error) {
+      console.error('Error getting project:', error);
+      return null;
+    }
+  }
+
+  async updateProject(id: string, updates: UpdateProjectData): Promise<Project | null> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Projects!A2:L'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return null;
+      }
+
+      const existingRow = rows[rowIndex];
+      const existingProject = this.rowToProject(existingRow);
+      
+      const updatedProjectData: Project = {
+        ...existingProject,
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Projects!A${sheetRowIndex}:L${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.projectToRow(updatedProjectData)]
+        }
+      });
+
+      return updatedProjectData;
+    } catch (error) {
+      console.error('Error updating project:', error);
+      return null;
+    }
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    try {
+      // Delete all tasks in the project first
+      const tasks = await this.getTasksByProject(id);
+      for (const task of tasks) {
+        await this.deleteTask(task.id);
+      }
+
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Projects!A2:L'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false;
+      }
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 8, // Projects sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1,
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      return false;
+    }
+  }
+
+  // Task methods
+  async getTasks(): Promise<Task[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Tasks!A2:O'
+      });
+
+      const rows = response.data.values || [];
+      const tasks = rows.map(row => this.rowToTask(row));
+      return tasks;
+    } catch (error) {
+      console.error('Error getting tasks:', error);
+      return [];
+    }
+  }
+
+  async getTasksByProject(projectId: string): Promise<Task[]> {
+    try {
+      const tasks = await this.getTasks();
+      return tasks.filter(task => task.projectId === projectId);
+    } catch (error) {
+      console.error('Error getting tasks by project:', error);
+      return [];
+    }
+  }
+
+  async createTask(taskData: CreateTaskData): Promise<Task> {
+    return this.executeWithRetry(async () => {
+      const task: Task = {
+        id: this.generateId(),
+        ...taskData,
+        actualHours: 0,
+        billableHours: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Tasks!A:O',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.taskToRow(task)]
+        }
+      });
+
+      return task;
+    }, 'createTask');
+  }
+
+  async getTask(id: string): Promise<Task | null> {
+    try {
+      const tasks = await this.getTasks();
+      return tasks.find(task => task.id === id) || null;
+    } catch (error) {
+      console.error('Error getting task:', error);
+      return null;
+    }
+  }
+
+  async updateTask(id: string, updates: UpdateTaskData): Promise<Task | null> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Tasks!A2:O'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return null;
+      }
+
+      const existingRow = rows[rowIndex];
+      const existingTask = this.rowToTask(existingRow);
+      
+      const updatedTaskData: Task = {
+        ...existingTask,
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `Tasks!A${sheetRowIndex}:O${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.taskToRow(updatedTaskData)]
+        }
+      });
+
+      return updatedTaskData;
+    } catch (error) {
+      console.error('Error updating task:', error);
+      return null;
+    }
+  }
+
+  async deleteTask(id: string): Promise<boolean> {
+    try {
+      // Delete all time entries for this task first
+      const timeEntries = await this.getTimeEntriesByTask(id);
+      for (const entry of timeEntries) {
+        await this.deleteTimeEntry(entry.id);
+      }
+
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'Tasks!A2:O'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false;
+      }
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 9, // Tasks sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1,
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      return false;
+    }
+  }
+
+  // Time Entry methods
+  async getTimeEntries(): Promise<TimeEntry[]> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TimeEntries!A2:K'
+      });
+
+      const rows = response.data.values || [];
+      const timeEntries = rows.map(row => this.rowToTimeEntry(row));
+      return timeEntries;
+    } catch (error) {
+      console.error('Error getting time entries:', error);
+      return [];
+    }
+  }
+
+  async getTimeEntriesByTask(taskId: string): Promise<TimeEntry[]> {
+    try {
+      const timeEntries = await this.getTimeEntries();
+      return timeEntries.filter(entry => entry.taskId === taskId);
+    } catch (error) {
+      console.error('Error getting time entries by task:', error);
+      return [];
+    }
+  }
+
+  async createTimeEntry(timeEntryData: CreateTimeEntryData): Promise<TimeEntry> {
+    return this.executeWithRetry(async () => {
+      const timeEntry: TimeEntry = {
+        id: this.generateId(),
+        ...timeEntryData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TimeEntries!A:K',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.timeEntryToRow(timeEntry)]
+        }
+      });
+
+      // Update task hours
+      await this.updateTaskHours(timeEntryData.taskId);
+
+      return timeEntry;
+    }, 'createTimeEntry');
+  }
+
+  async updateTimeEntry(id: string, updates: UpdateTimeEntryData): Promise<TimeEntry | null> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TimeEntries!A2:K'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return null;
+      }
+
+      const existingRow = rows[rowIndex];
+      const existingTimeEntry = this.rowToTimeEntry(existingRow);
+      
+      const updatedTimeEntryData: TimeEntry = {
+        ...existingTimeEntry,
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `TimeEntries!A${sheetRowIndex}:K${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.timeEntryToRow(updatedTimeEntryData)]
+        }
+      });
+
+      // Update task hours
+      await this.updateTaskHours(updatedTimeEntryData.taskId);
+
+      return updatedTimeEntryData;
+    } catch (error) {
+      console.error('Error updating time entry:', error);
+      return null;
+    }
+  }
+
+  async deleteTimeEntry(id: string): Promise<boolean> {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'TimeEntries!A2:K'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === id);
+
+      if (rowIndex === -1) {
+        return false;
+      }
+
+      const existingRow = rows[rowIndex];
+      const existingTimeEntry = this.rowToTimeEntry(existingRow);
+      const taskId = existingTimeEntry.taskId;
+
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 10, // TimeEntries sheet
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1,
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      // Update task hours
+      await this.updateTaskHours(taskId);
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      return false;
+    }
+  }
+
+  // Helper methods for task management
+  private async updateTaskHours(taskId: string): Promise<void> {
+    try {
+      const timeEntries = await this.getTimeEntriesByTask(taskId);
+      const actualHours = timeEntries.reduce((total, entry) => total + (entry.duration / 60), 0);
+      const billableHours = timeEntries
+        .filter(entry => entry.isBillable)
+        .reduce((total, entry) => total + (entry.duration / 60), 0);
+
+      await this.updateTask(taskId, { actualHours, billableHours });
+    } catch (error) {
+      console.error('Error updating task hours:', error);
+    }
+  }
+
+  // Row conversion methods for task management
+  private rowToProject(row: string[]): Project {
+    return {
+      id: row[0] || '',
+      name: row[1] || '',
+      description: row[2] && row[2].trim() !== '' ? row[2] : undefined,
+      clientId: row[3] || '',
+      status: (row[4] as ProjectStatus) || 'planning',
+      startDate: this.parseDate(row[5] || ''),
+      endDate: row[6] && row[6].trim() !== '' ? this.parseDate(row[6]) : undefined,
+      budget: row[7] && row[7].trim() !== '' ? parseFloat(row[7]) : undefined,
+      hourlyRate: row[8] && row[8].trim() !== '' ? parseFloat(row[8]) : undefined,
+      isActive: row[9] === 'true',
+      createdAt: this.parseDate(row[10] || ''),
+      updatedAt: this.parseDate(row[11] || '')
+    };
+  }
+
+  private projectToRow(project: Project): string[] {
+    return [
+      project.id,
+      project.name,
+      project.description || '',
+      project.clientId,
+      project.status,
+      project.startDate.toISOString(),
+      project.endDate?.toISOString() || '',
+      project.budget?.toString() || '',
+      project.hourlyRate?.toString() || '',
+      project.isActive.toString(),
+      project.createdAt.toISOString(),
+      project.updatedAt.toISOString()
+    ];
+  }
+
+  private rowToTask(row: string[]): Task {
+    return {
+      id: row[0] || '',
+      projectId: row[1] || '',
+      title: row[2] || '',
+      description: row[3] && row[3].trim() !== '' ? row[3] : undefined,
+      status: (row[4] as TaskStatus) || 'todo',
+      priority: (row[5] as TaskPriority) || 'medium',
+      assignedTo: row[6] && row[6].trim() !== '' ? row[6] : undefined,
+      dueDate: row[7] && row[7].trim() !== '' ? this.parseDate(row[7]) : undefined,
+      estimatedHours: row[8] && row[8].trim() !== '' ? parseFloat(row[8]) : undefined,
+      actualHours: parseFloat(row[9] || '0'),
+      billableHours: parseFloat(row[10] || '0'),
+      isBillable: row[11] === 'true',
+      tags: row[12] && row[12].trim() !== '' ? JSON.parse(row[12]) : undefined,
+      createdAt: this.parseDate(row[13] || ''),
+      updatedAt: this.parseDate(row[14] || '')
+    };
+  }
+
+  private taskToRow(task: Task): string[] {
+    return [
+      task.id,
+      task.projectId,
+      task.title,
+      task.description || '',
+      task.status,
+      task.priority,
+      task.assignedTo || '',
+      task.dueDate?.toISOString() || '',
+      task.estimatedHours?.toString() || '',
+      task.actualHours.toString(),
+      task.billableHours.toString(),
+      task.isBillable.toString(),
+      task.tags ? JSON.stringify(task.tags) : '',
+      task.createdAt.toISOString(),
+      task.updatedAt.toISOString()
+    ];
+  }
+
+  private rowToTimeEntry(row: string[]): TimeEntry {
+    return {
+      id: row[0] || '',
+      taskId: row[1] || '',
+      projectId: row[2] || '',
+      description: row[3] && row[3].trim() !== '' ? row[3] : undefined,
+      startTime: this.parseDate(row[4] || ''),
+      endTime: row[5] && row[5].trim() !== '' ? this.parseDate(row[5]) : undefined,
+      duration: parseInt(row[6] || '0'),
+      isBillable: row[7] === 'true',
+      hourlyRate: row[8] && row[8].trim() !== '' ? parseFloat(row[8]) : undefined,
+      createdAt: this.parseDate(row[9] || ''),
+      updatedAt: this.parseDate(row[10] || '')
+    };
+  }
+
+  private timeEntryToRow(timeEntry: TimeEntry): string[] {
+    return [
+      timeEntry.id,
+      timeEntry.taskId,
+      timeEntry.projectId,
+      timeEntry.description || '',
+      timeEntry.startTime.toISOString(),
+      timeEntry.endTime?.toISOString() || '',
+      timeEntry.duration.toString(),
+      timeEntry.isBillable.toString(),
+      timeEntry.hourlyRate?.toString() || '',
+      timeEntry.createdAt.toISOString(),
+      timeEntry.updatedAt.toISOString()
+    ];
+  }
+
   /**
    * Initialize the Google Sheets structure with all required sheets and headers
    */
@@ -1616,6 +2156,18 @@ export class GoogleSheetsService {
         {
           name: 'TemplateLineItems',
           headers: ['ID', 'TemplateID', 'Description', 'Quantity', 'Rate', 'Amount']
+        },
+        {
+          name: 'Projects',
+          headers: ['ID', 'Name', 'Description', 'ClientID', 'Status', 'StartDate', 'EndDate', 'Budget', 'HourlyRate', 'IsActive', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'Tasks',
+          headers: ['ID', 'ProjectID', 'Title', 'Description', 'Status', 'Priority', 'AssignedTo', 'DueDate', 'EstimatedHours', 'ActualHours', 'BillableHours', 'IsBillable', 'Tags', 'CreatedAt', 'UpdatedAt']
+        },
+        {
+          name: 'TimeEntries',
+          headers: ['ID', 'TaskID', 'ProjectID', 'Description', 'StartTime', 'EndTime', 'Duration', 'IsBillable', 'HourlyRate', 'CreatedAt', 'UpdatedAt']
         }
       ];
 

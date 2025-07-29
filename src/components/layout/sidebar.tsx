@@ -15,11 +15,15 @@ import {
   XMarkIcon,
   QuestionMarkCircleIcon,
   DocumentDuplicateIcon,
+  FolderIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, shortcut: 'Alt+D' },
   { name: 'Clients', href: '/clients', icon: UserGroupIcon, shortcut: 'Alt+C' },
+  { name: 'Projects', href: '/projects', icon: FolderIcon, shortcut: 'Alt+J' },
+  { name: 'Tasks', href: '/tasks', icon: CheckCircleIcon, shortcut: 'Alt+K' },
   { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon, shortcut: 'Alt+I' },
   { name: 'Templates', href: '/templates', icon: DocumentDuplicateIcon, shortcut: 'Alt+T' },
   { name: 'Payments', href: '/payments', icon: CreditCardIcon, shortcut: 'Alt+P' },

@@ -94,7 +94,7 @@ export const invoiceFormSchema = z.object({
   if (data.isRecurring && data.recurringSchedule) {
     const startDate = new Date(data.recurringSchedule.startDate);
     const endDate = data.recurringSchedule.endDate ? new Date(data.recurringSchedule.endDate) : null;
-    
+
     if (endDate && endDate <= startDate) {
       return false;
     }
@@ -269,12 +269,100 @@ export const validatePositiveNumber = (num: number): boolean => {
   return z.number().positive().safeParse(num).success;
 };
 
+// Project validation schemas
+export const projectFormSchema = z.object({
+  name: z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
+  description: z.string().max(1000, 'Description too long').optional().or(z.literal('')),
+  clientId: z.string().min(1, 'Client is required'),
+  status: z.enum(['planning', 'active', 'on-hold', 'completed', 'cancelled']),
+  startDate: z.string().min(1, 'Start date is required'),
+  endDate: z.string().optional().or(z.literal('')),
+  budget: z.number().min(0, 'Budget cannot be negative').optional(),
+  hourlyRate: z.number().min(0, 'Hourly rate cannot be negative').optional(),
+  isActive: z.boolean(),
+});
+
+export const projectSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  description: z.string().max(1000).optional(),
+  clientId: z.string().uuid(),
+  status: z.enum(['planning', 'active', 'on-hold', 'completed', 'cancelled']),
+  startDate: z.date(),
+  endDate: z.date().optional(),
+  budget: z.number().min(0).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  isActive: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+// Task validation schemas
+export const taskFormSchema = z.object({
+  projectId: z.string().min(1, 'Project is required'),
+  title: z.string().min(1, 'Task title is required').max(200, 'Task title too long'),
+  description: z.string().max(1000, 'Description too long').optional().or(z.literal('')),
+  status: z.enum(['todo', 'in-progress', 'review', 'completed', 'cancelled']),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  assignedTo: z.string().max(100, 'Assignee name too long').optional().or(z.literal('')),
+  dueDate: z.string().optional().or(z.literal('')),
+  estimatedHours: z.number().min(0, 'Estimated hours cannot be negative').optional(),
+  isBillable: z.boolean(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const taskSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).optional(),
+  status: z.enum(['todo', 'in-progress', 'review', 'completed', 'cancelled']),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  assignedTo: z.string().max(100).optional(),
+  dueDate: z.date().optional(),
+  estimatedHours: z.number().min(0).optional(),
+  actualHours: z.number().min(0),
+  billableHours: z.number().min(0),
+  isBillable: z.boolean(),
+  tags: z.array(z.string()).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+// Time Entry validation schemas
+export const timeEntryFormSchema = z.object({
+  description: z.string().max(500, 'Description too long').optional().or(z.literal('')),
+  startTime: z.string().min(1, 'Start time is required'),
+  endTime: z.string().optional().or(z.literal('')),
+  duration: z.number().min(0, 'Duration must be positive'),
+  isBillable: z.boolean().default(true),
+});
+
+export const timeEntrySchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  description: z.string().max(500).optional(),
+  startTime: z.date(),
+  endTime: z.date().optional(),
+  duration: z.number().min(1),
+  isBillable: z.boolean(),
+  hourlyRate: z.number().min(0).optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
 // Type exports for form data
 export type ClientFormData = z.infer<typeof clientFormSchema>;
 export type LineItemFormData = z.infer<typeof lineItemFormSchema>;
 export type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 export type PaymentFormData = z.infer<typeof paymentFormSchema>;
 export type TemplateFormData = z.infer<typeof templateFormSchema>;
+
+
+export type ProjectFormData = z.infer<typeof projectFormSchema>;
+export type TaskFormData = z.infer<typeof taskFormSchema>;
+export type TimeEntryFormData = z.infer<typeof timeEntryFormSchema>;
 export type CompanySettingsFormData = z.infer<typeof companySettingsFormSchema>;
 export type AppSettingsFormData = z.infer<typeof appSettingsFormSchema>;
 

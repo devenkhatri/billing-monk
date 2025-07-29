@@ -67,14 +67,14 @@ export default function DashboardPage() {
       
       const data = await measurePerformance(
         'Dashboard Data Fetch',
-        () => cachedFetch(`/api/dashboard?${params.toString()}`, undefined, 1 * 60 * 1000)
+        () => cachedFetch<{ success: boolean; data: DashboardMetrics; error?: { message: string } }>(`/api/dashboard?${params.toString()}`, undefined, 1 * 60 * 1000)
       );
       
       if (data.success) {
         setMetrics(data.data);
         setError(null);
       } else {
-        setError(data.error.message);
+        setError(data.error?.message || 'Failed to fetch dashboard data');
       }
     } catch (err) {
       setError('Failed to fetch dashboard data');

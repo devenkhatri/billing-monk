@@ -35,7 +35,7 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching invoice:', error);
     return createErrorResponse(
-      'FETCH_ERROR',
+      'INTERNAL_ERROR',
       'Failed to fetch invoice',
       500,
       error
@@ -133,7 +133,7 @@ export async function PUT(
   } catch (error) {
     console.error('Error updating invoice:', error);
     return createErrorResponse(
-      'UPDATE_ERROR',
+      'INTERNAL_ERROR',
       'Failed to update invoice',
       500,
       error
@@ -169,7 +169,7 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting invoice:', error);
     return createErrorResponse(
-      'DELETE_ERROR',
+      'INTERNAL_ERROR',
       'Failed to delete invoice',
       500,
       error

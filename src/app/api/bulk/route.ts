@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { GoogleSheetsService } from '@/lib/google-sheets';
 import { createErrorResponse, createSuccessResponse } from '@/lib/middleware';
 import { validateAuth, validateRequestBody } from '@/lib/api-validation';
+import { CreateClientData, CreateInvoiceData, CreatePaymentData, CreateTemplateData } from '@/types';
 import { z } from 'zod';
 
 // Bulk operation schemas
@@ -334,16 +335,16 @@ async function handleBulkCreate(
         
         switch (type) {
           case 'clients':
-            result = await sheetsService.createClient(item);
+            result = await sheetsService.createClient(item as CreateClientData);
             break;
           case 'invoices':
-            result = await sheetsService.createInvoice(item);
+            result = await sheetsService.createInvoice(item as CreateInvoiceData);
             break;
           case 'payments':
-            result = await sheetsService.createPayment(item);
+            result = await sheetsService.createPayment(item as CreatePaymentData);
             break;
           case 'templates':
-            result = await sheetsService.createTemplate(item);
+            result = await sheetsService.createTemplate(item as CreateTemplateData);
             break;
         }
 

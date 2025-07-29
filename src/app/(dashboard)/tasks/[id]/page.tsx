@@ -109,7 +109,7 @@ export default function TaskDetailPage() {
         const timeEntriesWithDates = timeEntriesData.data.map(entry => ({
           ...entry,
           startTime: new Date(entry.startTime),
-          endTime: entry.endTime ? new Date(entry.endTime) : null,
+          endTime: entry.endTime ? new Date(entry.endTime) : undefined,
           createdAt: new Date(entry.createdAt),
           updatedAt: new Date(entry.updatedAt)
         }));
@@ -260,7 +260,7 @@ export default function TaskDetailPage() {
         const timeEntryWithDates = {
           ...data.data,
           startTime: new Date(data.data.startTime),
-          endTime: data.data.endTime ? new Date(data.data.endTime) : null,
+          endTime: data.data.endTime ? new Date(data.data.endTime) : undefined,
           createdAt: new Date(data.data.createdAt),
           updatedAt: new Date(data.data.updatedAt)
         };

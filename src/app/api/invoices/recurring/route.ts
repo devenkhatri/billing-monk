@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching recurring invoices:', error);
     return createErrorResponse(
-      'FETCH_ERROR',
+      'INTERNAL_ERROR',
       'Failed to fetch recurring invoices',
       500,
       error
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error generating recurring invoices:', error);
     return createErrorResponse(
-      'GENERATION_ERROR',
+      'INTERNAL_ERROR',
       'Failed to generate recurring invoices',
       500,
       error

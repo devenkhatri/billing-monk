@@ -1,75 +1,17 @@
 'use client';
 
 import { ErrorCode, getUserFriendlyMessage } from './client-error-handler';
+import {
+  Client,
+  Invoice,
+  Payment,
+  CompanySettings,
+  Template,
+  Project,
+  Task,
+  TimeEntry
+} from '@/types';
 
-// Data model interfaces
-interface Client {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  clientId: string;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
-  issueDate: string;
-  dueDate: string;
-  subtotal: number;
-  taxRate: number;
-  taxAmount: number;
-  total: number;
-  paidAmount: number;
-  balance: number;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Payment {
-  id: string;
-  invoiceId: string;
-  amount: number;
-  paymentDate: string;
-  paymentMethod?: string;
-  notes?: string;
-  createdAt: string;
-}
-
-interface Template {
-  id: string;
-  name: string;
-  description?: string;
-  lineItems: any[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface CompanySettings {
-  name: string;
-  email?: string;
-  phone?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  };
-  taxRate?: number;
-  currency?: string;
-}
 
 // API response types
 interface ApiSuccessResponse<T> {

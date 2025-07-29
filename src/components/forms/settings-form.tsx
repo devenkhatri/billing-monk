@@ -35,7 +35,7 @@ const settingsSchema = z.object({
 });
 
 interface SettingsFormProps {
-  initialData?: CompanySettings;
+  initialData?: Partial<CompanySettingsFormData>;
   onSubmit: (data: CompanySettingsFormData) => Promise<void>;
   isLoading?: boolean;
 }

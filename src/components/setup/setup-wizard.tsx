@@ -181,7 +181,7 @@ export function SetupWizard() {
           <div className="w-16 h-16 bg-blue-600 rounded-lg flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-2xl">IN</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Invoice Ninja</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Billing Monk</h1>
           <p className="text-gray-600 mt-2">Setup your invoice management system</p>
         </div>
 
@@ -271,7 +271,7 @@ export function SetupWizard() {
                 Setup Complete!
               </h2>
               <p className="text-gray-600">
-                Your Invoice Ninja application is ready to use.
+                Your Billing Monk application is ready to use.
               </p>
             </div>
 
@@ -287,7 +287,7 @@ export function SetupWizard() {
             )}
 
             <Button onClick={proceedToApp} className="w-full">
-              Launch Invoice Ninja
+              Launch Billing Monk
             </Button>
           </div>
         )}

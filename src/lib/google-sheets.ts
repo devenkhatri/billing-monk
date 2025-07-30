@@ -49,10 +49,65 @@ interface RetryConfig {
   backoffMultiplier: number;
 }
 
+// Request queue to prevent quota exhaustion
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private readonly maxConcurrent = 1; // Limit to 1 concurrent request to avoid quota issues
+  private readonly minInterval = 300; // Minimum 300ms between requests
+  private lastRequestTime = 0;
+  private activeRequests = 0;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      this.process();
+    });
+  }
+
+  private async process() {
+    if (this.processing || this.activeRequests >= this.maxConcurrent) {
+      return;
+    }
+
+    this.processing = true;
+
+    while (this.queue.length > 0 && this.activeRequests < this.maxConcurrent) {
+      const request = this.queue.shift();
+      if (request) {
+        this.activeRequests++;
+        
+        // Ensure minimum interval between requests
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < this.minInterval) {
+          await new Promise(resolve => setTimeout(resolve, this.minInterval - timeSinceLastRequest));
+        }
+        this.lastRequestTime = Date.now();
+
+        // Execute request without awaiting to allow concurrent processing
+        request().finally(() => {
+          this.activeRequests--;
+          this.process(); // Process next request
+        });
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: 5, // Increased retries for quota issues
-  baseDelay: 2000, // 2 seconds - longer initial delay
-  maxDelay: 30000, // 30 seconds - longer max delay for quota issues
+  maxRetries: 3, // Reduced retries to prevent quota exhaustion
+  baseDelay: 1000, // 1 second initial delay
+  maxDelay: 10000, // 10 seconds max delay
   backoffMultiplier: 2
 };
 
@@ -70,9 +125,10 @@ export class GoogleSheetsService {
   private isInitialized: boolean = false;
   private initializationPromise: Promise<void> | null = null;
   private cache: Map<string, CacheEntry<any>> = new Map();
-  private readonly DEFAULT_CACHE_TTL = 30000; // 30 seconds
+  private readonly DEFAULT_CACHE_TTL = 60000; // 60 seconds - increased cache TTL
+  private requestQueue: RequestQueue = new RequestQueue();
   private lastRequestTime: number = 0;
-  private readonly MIN_REQUEST_INTERVAL = 100; // 100ms between requests
+  private readonly MIN_REQUEST_INTERVAL = parseInt(process.env.SHEETS_REQUEST_INTERVAL || '300'); // 300ms between requests - configurable
 
   constructor(accessToken: string, spreadsheetId: string, retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG) {
     const auth = new google.auth.OAuth2();
@@ -132,9 +188,10 @@ export class GoogleSheetsService {
       service.isInitialized = false;
       service.initializationPromise = null;
       service.cache = new Map();
-      service.DEFAULT_CACHE_TTL = 30000;
+      service.DEFAULT_CACHE_TTL = 60000; // 60 seconds - increased cache TTL
+      service.requestQueue = new RequestQueue(); // Initialize the request queue
       service.lastRequestTime = 0;
-      service.MIN_REQUEST_INTERVAL = 100;
+      service.MIN_REQUEST_INTERVAL = parseInt(process.env.SHEETS_REQUEST_INTERVAL || '300');
 
       return service;
     } catch (error) {
@@ -224,46 +281,49 @@ export class GoogleSheetsService {
     operationName: string,
     retryable: boolean = true
   ): Promise<T> {
-    let lastError: Error;
-    let attempt = 0;
+    // Use request queue to prevent quota exhaustion
+    return this.requestQueue.add(async () => {
+      let lastError: Error;
+      let attempt = 0;
 
-    while (attempt <= this.retryConfig.maxRetries) {
-      try {
-        // Apply rate limiting before each request
-        await this.rateLimit();
-        return await operation();
-      } catch (error: any) {
-        lastError = error;
-        attempt++;
+      while (attempt <= this.retryConfig.maxRetries) {
+        try {
+          // Apply rate limiting before each request
+          await this.rateLimit();
+          return await operation();
+        } catch (error: any) {
+          lastError = error;
+          attempt++;
 
-        // Parse Google Sheets API errors
-        const parsedError = this.parseGoogleSheetsError(error, operationName);
-        
-        // Don't retry if error is not retryable or we've exceeded max retries
-        if (!retryable || !parsedError.retryable || attempt > this.retryConfig.maxRetries) {
-          throw parsedError;
+          // Parse Google Sheets API errors
+          const parsedError = this.parseGoogleSheetsError(error, operationName);
+          
+          // Don't retry if error is not retryable or we've exceeded max retries
+          if (!retryable || !parsedError.retryable || attempt > this.retryConfig.maxRetries) {
+            throw parsedError;
+          }
+
+          // Calculate delay with exponential backoff and jitter for rate limit errors
+          let delay = Math.min(
+            this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt - 1),
+            this.retryConfig.maxDelay
+          );
+
+          // Add jitter and longer delay for rate limit errors
+          if (parsedError instanceof RateLimitError) {
+            delay = delay * (2 + Math.random()); // 2x to 3x delay with jitter for quota errors
+          }
+
+          console.warn(`${operationName} failed (attempt ${attempt}/${this.retryConfig.maxRetries + 1}), retrying in ${delay}ms:`, parsedError.message);
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
-
-        // Calculate delay with exponential backoff and jitter for rate limit errors
-        let delay = Math.min(
-          this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt - 1),
-          this.retryConfig.maxDelay
-        );
-
-        // Add jitter and longer delay for rate limit errors
-        if (parsedError instanceof RateLimitError) {
-          delay = delay * (1.5 + Math.random() * 0.5); // 1.5x to 2x delay with jitter
-        }
-
-        console.warn(`${operationName} failed (attempt ${attempt}/${this.retryConfig.maxRetries + 1}), retrying in ${delay}ms:`, parsedError.message);
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    }
 
-    // This should never be reached, but just in case
-    throw this.parseGoogleSheetsError(lastError!, operationName);
+      // This should never be reached, but just in case
+      throw this.parseGoogleSheetsError(lastError!, operationName);
+    });
   }
 
   /**
@@ -318,6 +378,12 @@ export class GoogleSheetsService {
   }
 
   async getClients(): Promise<Client[]> {
+    const cacheKey = 'clients_all';
+    const cached = this.getCachedData<Client[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     return this.executeWithRetry(async () => {
       // Ensure sheets exist before reading
       await this.ensureInitialized();
@@ -328,7 +394,12 @@ export class GoogleSheetsService {
       });
 
       const rows = response.data.values || [];
-      return rows.map(row => this.rowToClient(row));
+      const clients = rows.map(row => this.rowToClient(row));
+      
+      // Cache the results
+      this.setCachedData(cacheKey, clients, this.DEFAULT_CACHE_TTL);
+      
+      return clients;
     }, 'getClients');
   }
 
@@ -349,6 +420,9 @@ export class GoogleSheetsService {
           values: [this.clientToRow(client)]
         }
       });
+
+      // Invalidate clients cache
+      this.clearCache('clients');
 
       return client;
     }, 'createClient');
@@ -2357,54 +2431,58 @@ export class GoogleSheetsService {
         console.log(`Created sheets: ${sheetsToCreate.map(s => s.name).join(', ')}`);
       }
 
-      // Batch check headers for all sheets to reduce API calls
-      const headerCheckPromises = requiredSheets.map(async (sheet) => {
+      // Sequential header checking to avoid quota issues
+      const headerCheckResults: Array<{ sheet: any; needsUpdate: boolean }> = [];
+      
+      for (const sheet of requiredSheets) {
         try {
-          const existingData = await this.sheets.spreadsheets.values.get({
-            spreadsheetId: this.spreadsheetId,
-            range: `${sheet.name}!A1:Z1`
-          });
+          const existingData = await this.executeWithRetry(async () => {
+            return await this.sheets.spreadsheets.values.get({
+              spreadsheetId: this.spreadsheetId,
+              range: `${sheet.name}!A1:Z1`
+            });
+          }, `check headers for ${sheet.name}`);
 
           const needsUpdate = !existingData.data.values || 
                              existingData.data.values.length === 0 || 
                              !this.arraysEqual(existingData.data.values[0], sheet.headers);
 
-          return { sheet, needsUpdate };
+          headerCheckResults.push({ sheet, needsUpdate });
         } catch (error) {
           console.warn(`Could not check headers for sheet ${sheet.name}:`, error);
-          return { sheet, needsUpdate: true };
+          headerCheckResults.push({ sheet, needsUpdate: true });
         }
-      });
-
-      const headerCheckResults = await Promise.all(headerCheckPromises);
+      }
       
-      // Batch update headers for sheets that need it
-      const updatePromises = headerCheckResults
-        .filter(result => result.needsUpdate)
-        .map(async ({ sheet }) => {
+      // Sequential header updates to avoid quota issues
+      for (const { sheet, needsUpdate } of headerCheckResults) {
+        if (needsUpdate) {
           try {
-            await this.sheets.spreadsheets.values.update({
-              spreadsheetId: this.spreadsheetId,
-              range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
-              valueInputOption: 'RAW',
-              requestBody: {
-                values: [sheet.headers]
-              }
-            });
+            await this.executeWithRetry(async () => {
+              return await this.sheets.spreadsheets.values.update({
+                spreadsheetId: this.spreadsheetId,
+                range: `${sheet.name}!A1:${this.getColumnLetter(sheet.headers.length)}1`,
+                valueInputOption: 'RAW',
+                requestBody: {
+                  values: [sheet.headers]
+                }
+              });
+            }, `update headers for ${sheet.name}`);
             console.log(`Updated headers for sheet: ${sheet.name}`);
           } catch (error) {
             console.warn(`Could not update headers for sheet ${sheet.name}:`, error);
           }
-        });
-
-      await Promise.all(updatePromises);
+        }
+      }
 
       // Add some default settings if Settings sheet is empty
       try {
-        const settingsData = await this.sheets.spreadsheets.values.get({
-          spreadsheetId: this.spreadsheetId,
-          range: 'Settings!A2:B'
-        });
+        const settingsData = await this.executeWithRetry(async () => {
+          return await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.spreadsheetId,
+            range: 'Settings!A2:B'
+          });
+        }, 'check default settings');
 
         if (!settingsData.data.values || settingsData.data.values.length === 0) {
           const defaultSettings = [
@@ -2416,14 +2494,16 @@ export class GoogleSheetsService {
             ['payment_terms', '30']
           ];
 
-          await this.sheets.spreadsheets.values.update({
-            spreadsheetId: this.spreadsheetId,
-            range: 'Settings!A2:B7',
-            valueInputOption: 'RAW',
-            requestBody: {
-              values: defaultSettings
-            }
-          });
+          await this.executeWithRetry(async () => {
+            return await this.sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: 'Settings!A2:B7',
+              valueInputOption: 'RAW',
+              requestBody: {
+                values: defaultSettings
+              }
+            });
+          }, 'add default settings');
 
           console.log('Added default settings');
         }

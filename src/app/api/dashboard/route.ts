@@ -18,16 +18,28 @@ export async function GET(request: NextRequest) {
 
     const sheetsService = await GoogleSheetsService.getAuthenticatedService();
     
-    // Fetch all data needed for dashboard metrics
-    const [clients, invoices, payments, projects, tasks, timeEntries, templates] = await Promise.all([
-      sheetsService.getClients(),
-      sheetsService.getInvoices(),
-      sheetsService.getPayments(),
-      sheetsService.getProjects(),
-      sheetsService.getTasks(),
-      sheetsService.getTimeEntries(),
-      sheetsService.getTemplates()
-    ]);
+    // Fetch data sequentially to avoid quota issues
+    console.log('Fetching dashboard data sequentially...');
+    const clients = await sheetsService.getClients();
+    console.log(`Fetched ${clients.length} clients`);
+    
+    const invoices = await sheetsService.getInvoices();
+    console.log(`Fetched ${invoices.length} invoices`);
+    
+    const payments = await sheetsService.getPayments();
+    console.log(`Fetched ${payments.length} payments`);
+    
+    const projects = await sheetsService.getProjects();
+    console.log(`Fetched ${projects.length} projects`);
+    
+    const tasks = await sheetsService.getTasks();
+    console.log(`Fetched ${tasks.length} tasks`);
+    
+    const timeEntries = await sheetsService.getTimeEntries();
+    console.log(`Fetched ${timeEntries.length} time entries`);
+    
+    const templates = await sheetsService.getTemplates();
+    console.log(`Fetched ${templates.length} templates`);
 
     // Filter data by date range if provided
     const filteredInvoices = dateFrom && dateTo 

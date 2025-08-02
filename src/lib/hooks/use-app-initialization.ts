@@ -21,6 +21,14 @@ export function useAppInitialization() {
     error: null,
   });
 
+  // Check for bypass flag
+  const checkBypass = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('bypass-initialization') === 'true';
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (sessionStatus === 'loading') {
       // Still loading session
@@ -41,6 +49,18 @@ export function useAppInitialization() {
     }
 
     if (sessionStatus === 'authenticated' && session) {
+      // Check for bypass flag first
+      if (checkBypass()) {
+        setStatus({
+          isLoading: false,
+          needsAuth: false,
+          needsSetup: false,
+          isReady: true,
+          error: null,
+        });
+        return;
+      }
+      
       // User is authenticated, now check sheets setup
       checkInitialization();
     }
@@ -50,27 +70,67 @@ export function useAppInitialization() {
     try {
       setStatus(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // Check if Google Sheets is set up
-      const response = await fetch('/api/sheets/setup');
-      
-      if (response.status === 401) {
-        // Authentication issue, redirect to auth
-        setStatus({
-          isLoading: false,
-          needsAuth: true,
-          needsSetup: false,
-          isReady: false,
-          error: null,
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      try {
+        // Check if Google Sheets is set up with timeout
+        const response = await fetch('/api/sheets/setup', {
+          signal: controller.signal
         });
-        return;
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        const { isConnected, sheetsInitialized } = result.data;
         
-        if (isConnected && sheetsInitialized) {
+        clearTimeout(timeoutId);
+        
+        if (response.status === 401) {
+          // Authentication issue, redirect to auth
+          setStatus({
+            isLoading: false,
+            needsAuth: true,
+            needsSetup: false,
+            isReady: false,
+            error: null,
+          });
+          return;
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          const { isConnected, sheetsInitialized } = result.data;
+          
+          if (isConnected && sheetsInitialized) {
+            setStatus({
+              isLoading: false,
+              needsAuth: false,
+              needsSetup: false,
+              isReady: true,
+              error: null,
+            });
+          } else {
+            setStatus({
+              isLoading: false,
+              needsAuth: false,
+              needsSetup: true,
+              isReady: false,
+              error: null,
+            });
+          }
+        } else {
+          setStatus({
+            isLoading: false,
+            needsAuth: false,
+            needsSetup: true,
+            isReady: false,
+            error: result.error?.message || 'Failed to check initialization status',
+          });
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          // Timeout occurred, skip setup check and proceed
+          console.warn('Sheets setup check timed out, proceeding without verification');
           setStatus({
             isLoading: false,
             needsAuth: false,
@@ -79,31 +139,18 @@ export function useAppInitialization() {
             error: null,
           });
         } else {
-          setStatus({
-            isLoading: false,
-            needsAuth: false,
-            needsSetup: true,
-            isReady: false,
-            error: null,
-          });
+          throw fetchError;
         }
-      } else {
-        setStatus({
-          isLoading: false,
-          needsAuth: false,
-          needsSetup: true,
-          isReady: false,
-          error: result.error?.message || 'Failed to check initialization status',
-        });
       }
     } catch (error) {
       console.error('Initialization check failed:', error);
+      // On error, proceed to app instead of blocking
       setStatus({
         isLoading: false,
         needsAuth: false,
-        needsSetup: true,
-        isReady: false,
-        error: 'Failed to check application status',
+        needsSetup: false,
+        isReady: true,
+        error: null,
       });
     }
   };

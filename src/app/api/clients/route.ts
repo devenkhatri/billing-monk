@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
   return withErrorHandling(async () => {
     // Check authentication
     const session = await getServerSession(authOptions);
+    console.log('Session in clients API:', session ? 'exists' : 'null');
+    console.log('Access token:', session?.accessToken ? 'exists' : 'missing');
+    
     if (!session?.accessToken) {
       throw new Error('Authentication required');
     }

@@ -100,7 +100,25 @@ export class ApiClient {
       clearTimeout(timeoutId);
 
       // Parse response
-      const data: ApiResponse<T> = await response.json();
+      const responseText = await response.text();
+      let data: ApiResponse<T>;
+      
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', parseError);
+        console.error('Response status:', response.status);
+        console.error('Response headers:', Object.fromEntries(response.headers.entries()));
+        console.error('Response text:', responseText.substring(0, 500));
+        
+        throw new ApiError(
+          'NETWORK_ERROR',
+          'Invalid response format received from server. Expected JSON but got: ' + responseText.substring(0, 100),
+          response.status,
+          false,
+          { parseError, responseText: responseText.substring(0, 500) }
+        );
+      }
 
       // Handle successful response
       if (data.success) {

@@ -14,6 +14,7 @@ A comprehensive billing and invoice management system built specifically for Ind
 - **Activity Logging**: Comprehensive audit trail of all system activities
 - **Business Analytics**: Generate insights with comprehensive reports
 - **Google Sheets Integration**: All data stored securely in your own Google Sheets
+- **Google Drive Storage**: Automatic invoice PDF storage with folder management
 - **Mobile Responsive**: Works seamlessly on all devices
 - **PDF Generation**: Create professional PDF invoices with GST details
 - **Template Management**: Full CRUD operations for invoice templates
@@ -69,14 +70,17 @@ Before installing the application, set up Google Cloud Console:
 1. Navigate to "APIs & Services" > "Library"
 2. Search for and enable:
    - Google Sheets API
-   - Google Drive API
+   - Google Drive API (required for invoice storage)
    - Google OAuth2 API
 
 **Create Service Account:**
 1. Go to "APIs & Services" > "Credentials"
 2. Click "Create Credentials" > "Service Account"
 3. Enter service account name and description
-4. Assign "Editor" role for Google Sheets access
+4. Assign roles:
+   - "Editor" role for Google Sheets access
+   - "Drive File" role for Google Drive access (recommended)
+   - Or "Drive" role for full Drive access (if needed)
 5. Download the JSON key file (keep secure)
 
 **Create OAuth 2.0 Client:**
@@ -85,7 +89,24 @@ Before installing the application, set up Google Cloud Console:
 3. Add authorized redirect URIs:
    - `http://localhost:3000/api/auth/callback/google` (development)
    - `https://yourdomain.com/api/auth/callback/google` (production)
-4. Note the Client ID and Client Secret
+4. Add authorized JavaScript origins:
+   - `http://localhost:3000` (development)
+   - `https://yourdomain.com` (production)
+5. Note the Client ID and Client Secret
+
+**Configure OAuth Consent Screen:**
+1. Go to "OAuth consent screen"
+2. Choose "External" user type (unless using Google Workspace)
+3. Fill required fields:
+   - App name: "Billing Monk" (or your app name)
+   - User support email: Your email
+   - Developer contact information: Your email
+4. Add scopes:
+   - `https://www.googleapis.com/auth/spreadsheets`
+   - `https://www.googleapis.com/auth/drive.file`
+   - `https://www.googleapis.com/auth/userinfo.email`
+   - `https://www.googleapis.com/auth/userinfo.profile`
+5. Add test users (for development) or publish the app (for production)
 
 ### Installation
 
@@ -154,6 +175,10 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n"
 GOOGLE_SHEETS_CLIENT_EMAIL=your-service-account@project-id.iam.gserviceaccount.com
 GOOGLE_SHEETS_PROJECT_ID=your-google-cloud-project-id
+
+# Google Drive Configuration (Optional - for invoice PDF storage)
+GOOGLE_DRIVE_ENABLED=true
+GOOGLE_DRIVE_FOLDER_NAME=Invoices
 ```
 
 #### Optional Variables
@@ -207,6 +232,261 @@ GOOGLE_SPREADSHEET_ID=your-spreadsheet-id-here
 2. Complete OAuth authentication
 3. The setup wizard will create necessary Google Sheets automatically
 4. Grant permissions when prompted
+
+### Google Drive Setup
+
+The application includes comprehensive Google Drive integration for automatic invoice PDF storage. This feature allows you to:
+
+- Automatically store generated invoice PDFs in Google Drive
+- Browse and select custom folders for invoice storage
+- Create new folders directly from the application
+- Manage folder permissions and organization
+- Track storage status for each invoice
+
+#### Google Drive Configuration Steps
+
+**1. Enable Google Drive API (if not already done):**
+- In Google Cloud Console, go to "APIs & Services" > "Library"
+- Search for "Google Drive API" and enable it
+- Ensure your OAuth consent screen includes the Drive scope
+
+**2. Configure Drive Permissions:**
+
+For **Service Account** (recommended for server operations):
+```bash
+# The service account needs access to create and manage files
+# Grant these roles in Google Cloud Console:
+# - "Drive File" role (recommended - can only access files it creates)
+# - OR "Drive" role (full access - use with caution)
+```
+
+For **OAuth User** (for user-specific folders):
+- Users will be prompted to grant Drive permissions during first use
+- Required scopes: `https://www.googleapis.com/auth/drive.file`
+
+**3. Application Configuration:**
+
+Add to your `.env.local`:
+```bash
+# Enable Google Drive integration
+GOOGLE_DRIVE_ENABLED=true
+
+# Default folder name (optional)
+GOOGLE_DRIVE_FOLDER_NAME=Invoices
+
+# Storage settings (optional)
+GOOGLE_DRIVE_AUTO_UPLOAD=true
+GOOGLE_DRIVE_RETRY_ATTEMPTS=3
+```
+
+#### Google Drive Features
+
+**Folder Browser Component:**
+- **Browse Folders**: View all accessible Google Drive folders
+- **Search Functionality**: Filter folders by name with real-time search
+- **Create Folders**: Create new folders directly from the browser
+- **Folder Selection**: Choose specific folders for invoice storage
+- **Default Option**: Use default "Invoices" folder in Drive root
+
+**Automatic Storage:**
+- **PDF Generation**: Invoices are automatically converted to PDF
+- **Smart Naming**: Files use format: `Invoice-{number}-{client}-{date}.pdf`
+- **Recurring Invoice Support**: Special naming for recurring invoices
+- **Conflict Resolution**: Automatic handling of duplicate filenames
+
+**Storage Management:**
+- **Status Tracking**: Monitor upload status for each invoice
+- **Retry Mechanism**: Automatic retry for failed uploads
+- **Error Handling**: Comprehensive error reporting and recovery
+- **Bulk Operations**: Retry multiple failed uploads at once
+
+#### Setting Up Google Drive Storage
+
+**Step 1: Access Settings**
+1. Navigate to Settings page in the application
+2. Scroll to "Google Drive Storage" section
+3. Toggle "Enable Google Drive Storage" to ON
+
+**Step 2: Configure Folder**
+1. Click "Browse Folders" to open the folder browser
+2. **Option A - Use Default**: Select "Default (Invoices)" to create/use an "Invoices" folder in your Drive root
+3. **Option B - Choose Existing**: Select any existing folder from the list
+4. **Option C - Create New**: 
+   - Click "New Folder" button
+   - Enter folder name (validates for invalid characters)
+   - Click "Create" to create and select the new folder
+
+**Step 3: Configure Auto-Upload**
+1. Toggle "Automatic Upload" to enable/disable automatic PDF storage
+2. When enabled, all new invoices will be automatically stored in Google Drive
+3. When disabled, you can manually upload invoices as needed
+
+**Step 4: Test Configuration**
+1. Create a test invoice
+2. Generate PDF to verify Google Drive integration
+3. Check the selected folder in Google Drive for the stored PDF
+4. Verify the filename format and content
+
+#### Folder Browser Features
+
+**Search and Filter:**
+```
+- Real-time search as you type
+- Case-insensitive folder name matching
+- Shows "X folders found" counter
+- Empty state for no results
+```
+
+**Folder Creation:**
+```
+- Click "New Folder" button
+- Enter folder name with validation:
+  - Required field validation
+  - Maximum 255 characters
+  - Invalid character detection (<>:"/\|?*)
+  - Duplicate name checking
+- Real-time creation with loading states
+- Automatic selection of newly created folder
+```
+
+**Folder Selection:**
+```
+- Radio button selection interface
+- Default "Invoices" option always available
+- Shows folder modification dates
+- Visual folder icons and metadata
+- Responsive design with proper scrolling
+```
+
+**Error Handling:**
+```
+- Authentication errors with sign-in prompts
+- Network errors with retry buttons
+- Permission errors with helpful messages
+- Quota exceeded warnings
+- Validation errors for folder names
+```
+
+#### Google Drive API Quotas and Limits
+
+**Understanding Quotas:**
+- **Queries per day**: 1,000,000,000 (typically sufficient)
+- **Queries per 100 seconds per user**: 1,000
+- **Queries per 100 seconds**: 10,000
+
+**Best Practices:**
+- The application implements automatic retry with exponential backoff
+- Batch operations where possible
+- Cache folder listings to reduce API calls
+- Monitor quota usage in Google Cloud Console
+
+**If You Hit Quota Limits:**
+1. **Wait**: Quotas reset automatically
+2. **Check Usage**: Monitor in Google Cloud Console
+3. **Request Increase**: Contact Google for quota increases if needed
+4. **Optimize**: Review application usage patterns
+
+#### Troubleshooting Google Drive Integration
+
+**Common Issues:**
+
+1. **"Authentication Required" Error:**
+   ```
+   Solution:
+   - Ensure user is signed in with Google account
+   - Check OAuth consent screen configuration
+   - Verify redirect URIs are correct
+   - Ensure Drive API is enabled
+   ```
+
+2. **"Permission Denied" Error:**
+   ```
+   Solution:
+   - Check service account roles in Google Cloud Console
+   - Ensure OAuth scopes include drive.file
+   - Verify user has granted Drive permissions
+   - Check folder sharing permissions
+   ```
+
+3. **"Folder Not Found" Error:**
+   ```
+   Solution:
+   - Folder may have been deleted or moved
+   - Check folder permissions
+   - Try selecting a different folder
+   - Use "Default (Invoices)" option as fallback
+   ```
+
+4. **"Quota Exceeded" Error:**
+   ```
+   Solution:
+   - Wait for quota reset (usually 100 seconds)
+   - Reduce frequency of operations
+   - Check Google Cloud Console for quota status
+   - Consider requesting quota increase
+   ```
+
+5. **Upload Failures:**
+   ```
+   Solution:
+   - Check internet connection
+   - Verify file size limits (not applicable for PDFs)
+   - Use retry mechanism in invoice details
+   - Check Google Drive storage space
+   ```
+
+**Debug Steps:**
+1. **Check API Status**: Visit `/api/google-drive/folders` endpoint
+2. **Review Logs**: Check browser console for detailed errors
+3. **Test Authentication**: Try signing out and back in
+4. **Verify Configuration**: Double-check environment variables
+5. **Test Permissions**: Try creating a file manually in Google Drive
+
+#### Google Drive Security Considerations
+
+**Data Privacy:**
+- Invoice PDFs are stored in user's own Google Drive
+- Application only accesses files it creates (with drive.file scope)
+- No access to existing user files unless explicitly granted
+
+**Access Control:**
+- Use minimal required scopes (drive.file recommended)
+- Service account has limited, controlled access
+- Users can revoke access at any time in Google Account settings
+
+**Best Practices:**
+- Regularly audit service account permissions
+- Monitor API usage and access patterns
+- Use HTTPS in production for secure data transmission
+- Keep service account keys secure and rotate regularly
+
+#### Advanced Google Drive Configuration
+
+**Custom Folder Structure:**
+```javascript
+// Example: Organize by year/month
+const folderStructure = {
+  root: "Invoices",
+  subfolders: {
+    year: new Date().getFullYear(),
+    month: new Date().toLocaleString('default', { month: 'long' })
+  }
+}
+```
+
+**Batch Operations:**
+```javascript
+// The application supports batch retry for failed uploads
+// Access via Settings > Google Drive > Retry Failed Uploads
+```
+
+**Integration with Other Services:**
+```javascript
+// Google Drive files can be integrated with:
+// - Google Docs (for invoice editing)
+// - Gmail (for email attachments)
+// - Google Sheets (for tracking)
+```
 
 #### Manual Setup
 If you prefer manual setup:
@@ -517,6 +797,125 @@ SESSION_MAX_AGE=86400
 
 ## Key Features Guide
 
+### Google Drive Integration
+
+The application includes comprehensive Google Drive integration for automatic invoice PDF storage and management.
+
+#### Google Drive Folder Browser
+
+**Accessing the Folder Browser:**
+1. Navigate to Settings page
+2. Scroll to "Google Drive Storage" section
+3. Click "Browse Folders" button
+
+**Folder Browser Features:**
+
+**Search and Navigation:**
+- **Real-time Search**: Type in the search box to filter folders instantly
+- **Folder Count**: Shows "X folders found" with current filter results
+- **Responsive Design**: Optimized for desktop and mobile devices
+- **Keyboard Navigation**: Full keyboard accessibility support
+
+**Folder Selection:**
+- **Default Option**: "Default (Invoices)" creates/uses an "Invoices" folder in Drive root
+- **Custom Folders**: Select any existing folder from your Google Drive
+- **Folder Details**: Shows folder names and last modified dates
+- **Visual Indicators**: Folder icons and clear selection states
+
+**Creating New Folders:**
+1. Click the "New Folder" button in the folder browser
+2. Enter a folder name in the form that appears
+3. **Validation Features**:
+   - Required field validation
+   - Maximum 255 character limit
+   - Invalid character detection (prevents <>:"/\|?*)
+   - Duplicate name checking
+4. Click "Create" to create the folder
+5. The new folder is automatically selected and added to the list
+
+**Error Handling and Recovery:**
+- **Authentication Errors**: Clear prompts to sign in to Google Drive
+- **Network Errors**: Retry buttons for connection issues
+- **Permission Errors**: Helpful messages about Drive access
+- **Quota Errors**: Information about API limits and wait times
+- **Validation Errors**: Real-time feedback for folder name issues
+
+#### Automatic Invoice Storage
+
+**How It Works:**
+1. When an invoice PDF is generated, it's automatically uploaded to your selected Google Drive folder
+2. Files are named using the format: `Invoice-{number}-{client}-{date}.pdf`
+3. For recurring invoices: `Invoice-{number}-{client}-{date}-Recurring-{frequency}.pdf`
+4. Duplicate filenames are automatically handled with timestamps
+
+**Storage Configuration:**
+- **Enable/Disable**: Toggle Google Drive storage on/off in settings
+- **Auto-Upload**: Choose whether to automatically upload all new invoices
+- **Folder Selection**: Choose where invoices are stored using the folder browser
+- **Status Tracking**: Monitor upload status for each invoice
+
+**Storage Status Indicators:**
+- **Pending**: Upload is queued or in progress
+- **Stored**: Successfully uploaded to Google Drive
+- **Failed**: Upload failed (with retry options)
+- **Disabled**: Google Drive storage is turned off
+
+#### Managing Stored Invoices
+
+**Invoice Status Tracking:**
+- Each invoice shows its Google Drive storage status
+- Failed uploads can be retried individually
+- Bulk retry option for multiple failed uploads
+- Direct links to view files in Google Drive (when available)
+
+**Retry Mechanisms:**
+- **Automatic Retry**: Failed uploads are automatically retried with exponential backoff
+- **Manual Retry**: Click retry button on individual invoices
+- **Bulk Retry**: Retry all failed uploads from the settings page
+- **Smart Retry**: Handles different error types appropriately
+
+**File Management:**
+- **Organized Storage**: Files are stored in your chosen folder
+- **Consistent Naming**: Standardized filename format for easy organization
+- **Conflict Resolution**: Automatic handling of duplicate names
+- **Metadata Preservation**: Invoice details are maintained in filenames
+
+#### Google Drive Settings
+
+**Configuration Options:**
+- **Storage Toggle**: Enable/disable Google Drive integration
+- **Folder Selection**: Choose storage location with folder browser
+- **Auto-Upload**: Automatic vs. manual upload control
+- **Retry Settings**: Configure retry attempts and timing
+
+**Monitoring and Maintenance:**
+- **Storage Status**: Overview of all invoice storage statuses
+- **Error Reporting**: Detailed error messages and resolution steps
+- **Usage Tracking**: Monitor Google Drive API usage
+- **Health Checks**: Verify Google Drive connectivity
+
+#### Benefits of Google Drive Integration
+
+**Automatic Backup:**
+- All invoice PDFs are automatically backed up to Google Drive
+- No manual file management required
+- Secure cloud storage with Google's infrastructure
+
+**Organization:**
+- Choose custom folder structures
+- Consistent file naming conventions
+- Easy integration with existing Google Drive workflows
+
+**Accessibility:**
+- Access invoices from any device with Google Drive
+- Share invoices directly from Google Drive
+- Integrate with other Google Workspace tools
+
+**Reliability:**
+- Automatic retry mechanisms for failed uploads
+- Comprehensive error handling and recovery
+- Status tracking for all storage operations
+
 ### Invoice Templates
 
 The application now includes a comprehensive template management system that allows you to create reusable invoice templates for common services or products.
@@ -579,15 +978,23 @@ For end-user documentation, including how to use the application features, pleas
 
 ### Documentation Structure
 
+- **`/docs/setup/`** - Setup and configuration guides
+  - `google-drive-setup.md` - Complete Google Drive integration setup guide
 - **`/docs/features/`** - Detailed feature documentation
+  - `google-drive-integration.md` - Comprehensive Google Drive features documentation
   - `templates.md` - Complete guide to invoice templates system
 - **`/docs/user-guide/`** - Step-by-step user guides
+  - `google-drive-guide.md` - Google Drive user guide with workflows and best practices
   - `templates-guide.md` - Templates user guide with workflows and best practices
 - **`/docs/api/`** - API documentation for developers
 - **`/docs/admin/`** - Administrator guides for system setup and maintenance
 
 ### Key Documentation Files
 
+- **Google Drive Quick Start**: `/docs/GOOGLE_DRIVE_QUICK_START.md` - 5-minute setup guide for Google Drive
+- **Google Drive Setup**: `/docs/setup/google-drive-setup.md` - Complete Google Drive configuration guide
+- **Google Drive Features**: `/docs/features/google-drive-integration.md` - Comprehensive Google Drive features documentation
+- **Google Drive User Guide**: `/docs/user-guide/google-drive-guide.md` - Step-by-step Google Drive usage guide
 - **Templates Feature**: `/docs/features/templates.md` - Comprehensive templates documentation
 - **Templates User Guide**: `/docs/user-guide/templates-guide.md` - Step-by-step templates usage
 - **API Reference**: Available in `/docs/api` directory

@@ -190,6 +190,12 @@ export interface AppSettings {
   backupFrequency: 'daily' | 'weekly' | 'monthly';
   theme: 'light' | 'dark' | 'system';
   colorTheme: 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle';
+  googleDrive: {
+    enabled: boolean;
+    folderId?: string;
+    folderName: string;
+    autoUpload: boolean;
+  };
 }
 
 // API Response types
@@ -383,6 +389,10 @@ export interface AppSettingsFormData {
   backupFrequency: 'daily' | 'weekly' | 'monthly';
   theme: 'light' | 'dark' | 'system';
   colorTheme: 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle';
+  googleDriveEnabled: boolean;
+  googleDriveFolderId?: string;
+  googleDriveFolderName: string;
+  googleDriveAutoUpload: boolean;
 }
 
 // Utility types for API operations
@@ -518,4 +528,37 @@ export interface SortConfig {
 export interface SearchConfig {
   query: string;
   fields: string[];
+}
+
+// Google Drive types
+export interface GoogleDriveConfig {
+  folderId?: string;
+  folderName: string;
+  enabled: boolean;
+}
+
+export interface DriveUploadResult {
+  success: boolean;
+  fileId?: string;
+  fileName?: string;
+  error?: string;
+  retryCount?: number;
+}
+
+export interface DriveFolder {
+  id: string;
+  name: string;
+  parentId?: string;
+  createdTime: Date;
+  modifiedTime: Date;
+}
+
+export interface InvoiceStorageStatus {
+  invoiceId: string;
+  driveFileId?: string;
+  status: 'pending' | 'stored' | 'failed' | 'disabled';
+  uploadedAt?: Date;
+  lastAttempt?: Date;
+  retryCount: number;
+  errorMessage?: string;
 }

@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: env.googleClientSecret,
       authorization: {
         params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/spreadsheets',
+          scope: 'openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
           access_type: 'offline',
           prompt: 'consent'
         }
@@ -38,8 +38,8 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token) {
-        session.accessToken = token.accessToken as string
-        session.error = token.error as string
+        (session as any).accessToken = token.accessToken as string
+        (session as any).error = token.error as string
       }
       return session
     }

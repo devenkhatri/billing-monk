@@ -13,6 +13,7 @@ import { FormField } from '@/components/forms/form-field';
 import { useNotifications } from '@/lib/notification-context';
 import { useTheme } from '@/lib/theme-context';
 import { ColorThemeSelector } from '@/components/ui/color-theme-selector';
+import { GoogleDriveSettings } from '@/components/forms/google-drive-settings';
 
 const settingsSchema = z.object({
   name: z.string().min(1, 'Company name is required'),
@@ -36,7 +37,19 @@ const settingsSchema = z.object({
 
 interface SettingsFormProps {
   initialData?: Partial<CompanySettingsFormData>;
+  appSettings?: {
+    googleDriveEnabled: boolean;
+    googleDriveFolderId?: string;
+    googleDriveFolderName: string;
+    googleDriveAutoUpload: boolean;
+  };
   onSubmit: (data: CompanySettingsFormData) => Promise<void>;
+  onGoogleDriveSettingsChange?: (settings: {
+    enabled: boolean;
+    folderId?: string;
+    folderName: string;
+    autoUpload: boolean;
+  }) => void;
   isLoading?: boolean;
 }
 
@@ -76,7 +89,13 @@ const templateOptions = [
   { value: 'minimal', label: 'Minimal Template' }
 ];
 
-export function SettingsForm({ initialData, onSubmit, isLoading = false }: SettingsFormProps) {
+export function SettingsForm({ 
+  initialData, 
+  appSettings,
+  onSubmit, 
+  onGoogleDriveSettingsChange,
+  isLoading = false 
+}: SettingsFormProps) {
   const { addNotification } = useNotifications();
   const { setTheme, setColorTheme } = useTheme();
   const [logoPreview, setLogoPreview] = useState<string | undefined>(initialData?.logo);
@@ -468,6 +487,21 @@ export function SettingsForm({ initialData, onSubmit, isLoading = false }: Setti
           <ColorThemeSelector disabled={isLoading} />
         </div>
       </Card>
+
+      {/* Google Drive Settings */}
+      {appSettings && (
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Google Drive Integration</h3>
+          <GoogleDriveSettings
+            enabled={appSettings.googleDriveEnabled}
+            folderId={appSettings.googleDriveFolderId}
+            folderName={appSettings.googleDriveFolderName}
+            autoUpload={appSettings.googleDriveAutoUpload}
+            onSettingsChange={onGoogleDriveSettingsChange || (() => {})}
+            disabled={isLoading}
+          />
+        </Card>
+      )}
 
       {/* Submit Button */}
       <div className="flex justify-end">

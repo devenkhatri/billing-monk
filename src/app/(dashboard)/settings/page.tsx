@@ -62,6 +62,56 @@ export default function SettingsPage() {
     }
   };
 
+  const handleGoogleDriveSettingsChange = async (settings: {
+    enabled: boolean;
+    folderId?: string;
+    folderName: string;
+    autoUpload: boolean;
+  }) => {
+    if (!appSettings) return;
+
+    try {
+      const updatedAppSettings = {
+        ...appSettings,
+        googleDrive: {
+          enabled: settings.enabled,
+          folderId: settings.folderId,
+          folderName: settings.folderName,
+          autoUpload: settings.autoUpload
+        }
+      };
+
+      const appSettingsData = {
+        googleSheetsId: updatedAppSettings.googleSheetsId || '',
+        autoBackup: updatedAppSettings.autoBackup,
+        backupFrequency: updatedAppSettings.backupFrequency,
+        theme: updatedAppSettings.theme,
+        colorTheme: updatedAppSettings.colorTheme,
+        googleDriveEnabled: settings.enabled,
+        googleDriveFolderId: settings.folderId || '',
+        googleDriveFolderName: settings.folderName,
+        googleDriveAutoUpload: settings.autoUpload
+      };
+
+      const response = await fetch('/api/app-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appSettingsData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setAppSettings(data.data);
+      } else {
+        throw new Error(data.error.message);
+      }
+    } catch (error) {
+      console.error('Error updating Google Drive settings:', error);
+      setError('Failed to update Google Drive settings');
+    }
+  };
+
   const handleSubmit = async (formData: CompanySettingsFormData) => {
     try {
       setIsSaving(true);
@@ -93,7 +143,11 @@ export default function SettingsPage() {
         autoBackup: appSettings?.autoBackup || true,
         backupFrequency: appSettings?.backupFrequency || 'weekly',
         theme: formData.theme,
-        colorTheme: (formData as any).colorTheme || appSettings?.colorTheme || 'default'
+        colorTheme: (formData as any).colorTheme || appSettings?.colorTheme || 'default',
+        googleDriveEnabled: appSettings?.googleDrive?.enabled || false,
+        googleDriveFolderId: appSettings?.googleDrive?.folderId || '',
+        googleDriveFolderName: appSettings?.googleDrive?.folderName || 'Invoices',
+        googleDriveAutoUpload: appSettings?.googleDrive?.autoUpload || true
       };
 
       // Update both settings
@@ -215,7 +269,14 @@ export default function SettingsPage() {
           theme: appSettings?.theme || 'light',
           colorTheme: appSettings?.colorTheme || 'default'
         } : undefined}
+        appSettings={appSettings ? {
+          googleDriveEnabled: appSettings.googleDrive?.enabled || false,
+          googleDriveFolderId: appSettings.googleDrive?.folderId,
+          googleDriveFolderName: appSettings.googleDrive?.folderName || 'Invoices',
+          googleDriveAutoUpload: appSettings.googleDrive?.autoUpload || true
+        } : undefined}
         onSubmit={handleSubmit}
+        onGoogleDriveSettingsChange={handleGoogleDriveSettingsChange}
         isLoading={isSaving}
       />
     </div>

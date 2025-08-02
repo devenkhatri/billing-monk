@@ -215,6 +215,10 @@ export const appSettingsFormSchema = z.object({
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']),
   theme: z.enum(['light', 'dark', 'system']).default('light'),
   colorTheme: z.enum(['default', 'lavender', 'mint', 'peach', 'sky', 'rose', 'sage', 'coral', 'periwinkle']).default('default'),
+  googleDriveEnabled: z.boolean().default(false),
+  googleDriveFolderId: z.string().optional().or(z.literal('')),
+  googleDriveFolderName: z.string().default('Invoices'),
+  googleDriveAutoUpload: z.boolean().default(true),
 });
 
 export const appSettingsSchema = z.object({
@@ -225,6 +229,12 @@ export const appSettingsSchema = z.object({
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']),
   theme: z.enum(['light', 'dark', 'system']).default('light'),
   colorTheme: z.enum(['default', 'lavender', 'mint', 'peach', 'sky', 'rose', 'sage', 'coral', 'periwinkle']).default('default'),
+  googleDrive: z.object({
+    enabled: z.boolean().default(false),
+    folderId: z.string().optional(),
+    folderName: z.string().default('Invoices'),
+    autoUpload: z.boolean().default(true),
+  }),
 });
 
 // API validation schemas

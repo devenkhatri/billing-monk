@@ -5,6 +5,8 @@ import { Invoice, Client, InvoiceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { StorageStatusIndicator } from '@/components/ui/storage-status-indicator';
+import { useStorageStatus } from '@/lib/hooks/use-storage-status';
 import { 
   PencilIcon, 
   TrashIcon, 
@@ -14,7 +16,8 @@ import {
   CheckCircleIcon,
   PaperAirplaneIcon,
   XCircleIcon,
-  DocumentArrowDownIcon
+  DocumentArrowDownIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 interface InvoiceTableProps {
@@ -55,6 +58,19 @@ export function InvoiceTable({
   });
   const [sortBy, setSortBy] = useState<'invoiceNumber' | 'issueDate' | 'dueDate' | 'total'>('issueDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [retryingUpload, setRetryingUpload] = useState<string | null>(null);
+  const [bulkRetrying, setBulkRetrying] = useState(false);
+  const [selectedInvoices, setSelectedInvoices] = useState<Set<string>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkRetryResult, setBulkRetryResult] = useState<{
+    successful: number;
+    failed: number;
+    total: number;
+  } | null>(null);
+
+  // Get storage statuses for all invoices
+  const invoiceIds = invoices.map(invoice => invoice.id);
+  const { storageStatuses, retryUpload, bulkRetryUpload } = useStorageStatus(invoiceIds);
 
   // Filter invoices
   const filteredInvoices = invoices.filter(invoice => {
@@ -156,6 +172,77 @@ export function InvoiceTable({
     }
   };
 
+  const handleRetryUpload = async (invoiceId: string) => {
+    try {
+      setRetryingUpload(invoiceId);
+      await retryUpload(invoiceId);
+    } catch (error) {
+      console.error('Failed to retry upload:', error);
+      // Error is already handled by the hook
+    } finally {
+      setRetryingUpload(null);
+    }
+  };
+
+  const handleBulkRetryUpload = async () => {
+    const failedInvoiceIds = Array.from(selectedInvoices).filter(invoiceId => 
+      storageStatuses[invoiceId]?.status === 'failed'
+    );
+
+    if (failedInvoiceIds.length === 0) {
+      return;
+    }
+
+    try {
+      setBulkRetrying(true);
+      const result = await bulkRetryUpload(failedInvoiceIds);
+      
+      // Clear selection after successful bulk retry
+      setSelectedInvoices(new Set());
+      setShowBulkActions(false);
+      
+      // Show result summary
+      setBulkRetryResult(result.summary);
+      
+      // Clear result message after 5 seconds
+      setTimeout(() => setBulkRetryResult(null), 5000);
+    } catch (error) {
+      console.error('Failed to bulk retry uploads:', error);
+      // Error is already handled by the hook
+    } finally {
+      setBulkRetrying(false);
+    }
+  };
+
+  const handleSelectInvoice = (invoiceId: string, checked: boolean) => {
+    const newSelection = new Set(selectedInvoices);
+    if (checked) {
+      newSelection.add(invoiceId);
+    } else {
+      newSelection.delete(invoiceId);
+    }
+    setSelectedInvoices(newSelection);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const failedInvoiceIds = sortedInvoices
+        .filter(invoice => storageStatuses[invoice.id]?.status === 'failed')
+        .map(invoice => invoice.id);
+      setSelectedInvoices(new Set(failedInvoiceIds));
+    } else {
+      setSelectedInvoices(new Set());
+    }
+  };
+
+  // Get failed invoices for bulk actions
+  const failedInvoices = sortedInvoices.filter(invoice => 
+    storageStatuses[invoice.id]?.status === 'failed'
+  );
+  const selectedFailedCount = Array.from(selectedInvoices).filter(invoiceId => 
+    storageStatuses[invoiceId]?.status === 'failed'
+  ).length;
+
   const statusOptions = [
     { value: '', label: 'All Statuses' },
     { value: 'draft', label: 'Draft' },
@@ -252,12 +339,108 @@ export function InvoiceTable({
         </div>
       </div>
 
+      {/* Bulk Retry Result */}
+      {bulkRetryResult && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-800">
+                Bulk retry completed: <span className="font-medium">{bulkRetryResult.successful} successful</span>
+                {bulkRetryResult.failed > 0 && (
+                  <span>, <span className="font-medium">{bulkRetryResult.failed} failed</span></span>
+                )}
+                {' '}out of {bulkRetryResult.total} total
+              </p>
+            </div>
+            <div className="ml-auto pl-3">
+              <div className="-mx-1.5 -my-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBulkRetryResult(null)}
+                  className="inline-flex bg-blue-50 rounded-md p-1.5 text-blue-500 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-blue-50 focus:ring-blue-600"
+                >
+                  <span className="sr-only">Dismiss</span>
+                  <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Actions */}
+      {failedInvoices.length > 0 && (
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={selectedFailedCount === failedInvoices.length && failedInvoices.length > 0}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Select all failed uploads ({failedInvoices.length})
+                </span>
+              </div>
+              {selectedFailedCount > 0 && (
+                <span className="text-sm text-blue-600 font-medium">
+                  {selectedFailedCount} selected
+                </span>
+              )}
+            </div>
+            
+            {selectedFailedCount > 0 && (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedInvoices(new Set());
+                    setShowBulkActions(false);
+                  }}
+                  disabled={bulkRetrying}
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  onClick={handleBulkRetryUpload}
+                  disabled={bulkRetrying}
+                  size="sm"
+                >
+                  <ArrowPathIcon className={`h-4 w-4 mr-2 ${bulkRetrying ? 'animate-spin' : ''}`} />
+                  {bulkRetrying ? 'Retrying...' : `Retry ${selectedFailedCount} Upload${selectedFailedCount > 1 ? 's' : ''}`}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {failedInvoices.length > 0 && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedFailedCount === failedInvoices.length && failedInvoices.length > 0}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </th>
+                )}
                 <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('invoiceNumber')}
@@ -319,6 +502,9 @@ export function InvoiceTable({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Balance
                 </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Storage
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -327,7 +513,7 @@ export function InvoiceTable({
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={failedInvoices.length > 0 ? 10 : 9} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2">Loading invoices...</span>
@@ -336,13 +522,27 @@ export function InvoiceTable({
                 </tr>
               ) : sortedInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={failedInvoices.length > 0 ? 10 : 9} className="px-6 py-12 text-center text-gray-500">
                     No invoices found matching your criteria.
                   </td>
                 </tr>
               ) : (
                 sortedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
+                    {failedInvoices.length > 0 && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {storageStatuses[invoice.id]?.status === 'failed' ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedInvoices.has(invoice.id)}
+                            onChange={(e) => handleSelectInvoice(invoice.id, e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                        ) : (
+                          <div className="h-4 w-4"></div>
+                        )}
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {invoice.invoiceNumber}
                     </td>
@@ -367,6 +567,26 @@ export function InvoiceTable({
                       <span className={invoice.balance > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
                         {formatCurrency(invoice.balance)}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center space-x-1">
+                        <StorageStatusIndicator 
+                          status={storageStatuses[invoice.id]} 
+                          size="sm"
+                        />
+                        {storageStatuses[invoice.id]?.status === 'failed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRetryUpload(invoice.id)}
+                            disabled={retryingUpload === invoice.id}
+                            className="text-blue-600 hover:text-blue-700 p-1"
+                            title="Retry upload to Google Drive"
+                          >
+                            <ArrowPathIcon className={`h-3 w-3 ${retryingUpload === invoice.id ? 'animate-spin' : ''}`} />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-1">

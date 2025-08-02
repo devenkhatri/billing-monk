@@ -292,6 +292,39 @@ export class ActivityLogger {
   }
 
   /**
+   * Log Google Drive activities
+   */
+  async logGoogleDriveActivity(
+    type: 'google_drive_upload_success' | 'google_drive_upload_failed' | 'google_drive_upload_error' | 'google_drive_retry',
+    invoiceId: string,
+    invoiceNumber: string,
+    userId?: string,
+    userEmail?: string,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    const descriptions = {
+      google_drive_upload_success: `Invoice ${invoiceNumber} PDF successfully stored to Google Drive`,
+      google_drive_upload_failed: `Invoice ${invoiceNumber} PDF failed to upload to Google Drive`,
+      google_drive_upload_error: `Invoice ${invoiceNumber} PDF Google Drive upload encountered an error`,
+      google_drive_retry: `Retrying Google Drive upload for invoice ${invoiceNumber}`,
+    };
+
+    await this.log({
+      type: 'invoice_updated',
+      description: descriptions[type],
+      entityType: 'invoice',
+      entityId: invoiceId,
+      entityName: invoiceNumber,
+      userId,
+      userEmail,
+      metadata: {
+        ...metadata,
+        action: type
+      }
+    });
+  }
+
+  /**
    * Get activity logs with filters
    */
   async getActivityLogs(filters?: any, pagination?: any) {

@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { Alert } from '@/components/ui/alert';
+import { StorageStatusIndicator } from '@/components/ui/storage-status-indicator';
 import { PaymentForm } from '@/components/forms/payment-form';
 import { PaymentHistory } from '@/components/payments/payment-history';
+import { useStorageStatus } from '@/lib/hooks/use-storage-status';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface InvoiceDetailProps {
   invoice: Invoice;
@@ -25,6 +28,12 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string>('');
   const [currentInvoice, setCurrentInvoice] = useState<Invoice>(invoice);
+  const [retryingUpload, setRetryingUpload] = useState(false);
+  const [retrySuccess, setRetrySuccess] = useState(false);
+
+  // Get storage status for this invoice
+  const { storageStatuses, retryUpload } = useStorageStatus([currentInvoice.id]);
+  const storageStatus = storageStatuses[currentInvoice.id];
 
   const handleAddPayment = async (data: PaymentFormData) => {
     try {
@@ -157,6 +166,23 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
     }
   };
 
+  const handleRetryUpload = async () => {
+    try {
+      setRetryingUpload(true);
+      setError('');
+      setRetrySuccess(false);
+      await retryUpload(currentInvoice.id);
+      setRetrySuccess(true);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setRetrySuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to retry upload');
+    } finally {
+      setRetryingUpload(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const baseClasses = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium';
     
@@ -226,7 +252,7 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Client Information */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Bill To</h3>
@@ -258,6 +284,68 @@ export function InvoiceDetail({ invoice, client, onClose, onInvoiceUpdate }: Inv
                 <div className="flex justify-between">
                   <span className="text-gray-600">Sent Date:</span>
                   <span className="font-medium">{formatDate(currentInvoice.sentDate)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Storage Status */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Google Drive Storage</h3>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <StorageStatusIndicator status={storageStatus} size="md" showLabel />
+              </div>
+              
+              {storageStatus && (
+                <div className="text-sm text-gray-600 space-y-1">
+                  {storageStatus.uploadedAt && (
+                    <div>
+                      <span className="text-gray-500">Uploaded:</span>
+                      <span className="ml-1">{formatDate(storageStatus.uploadedAt)}</span>
+                    </div>
+                  )}
+                  
+                  {storageStatus.lastAttempt && storageStatus.status === 'failed' && (
+                    <div>
+                      <span className="text-gray-500">Last Attempt:</span>
+                      <span className="ml-1">{formatDate(storageStatus.lastAttempt)}</span>
+                    </div>
+                  )}
+                  
+                  {storageStatus.retryCount > 0 && (
+                    <div>
+                      <span className="text-gray-500">Retries:</span>
+                      <span className="ml-1">{storageStatus.retryCount}</span>
+                    </div>
+                  )}
+                  
+                  {storageStatus.errorMessage && (
+                    <div className="text-red-600 text-xs">
+                      {storageStatus.errorMessage}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {storageStatus?.status === 'failed' && (
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryUpload}
+                    disabled={retryingUpload}
+                    className="w-full"
+                  >
+                    <ArrowPathIcon className={`h-4 w-4 mr-2 ${retryingUpload ? 'animate-spin' : ''}`} />
+                    {retryingUpload ? 'Retrying...' : 'Retry Upload'}
+                  </Button>
+                  
+                  {retrySuccess && (
+                    <div className="text-xs text-green-600 text-center">
+                      Retry initiated successfully
+                    </div>
+                  )}
                 </div>
               )}
             </div>

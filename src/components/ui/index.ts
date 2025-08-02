@@ -9,3 +9,4 @@ export { Alert } from './alert';
 export { Spinner, LoadingSkeleton, LoadingState, TableLoadingSkeleton } from './loading';
 export { ErrorBoundary, ErrorFallback } from './error-boundary';
 export { DateRangePicker } from './date-range-picker';
+export { StorageStatusIndicator } from './storage-status-indicator';

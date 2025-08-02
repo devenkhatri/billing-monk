@@ -24,7 +24,12 @@ export async function GET(): Promise<NextResponse<ApiResponse<AppSettings>>> {
         autoBackup: true,
         backupFrequency: 'weekly',
         theme: 'light',
-        colorTheme: 'default'
+        colorTheme: 'default',
+        googleDrive: {
+          enabled: false,
+          folderName: 'Invoices',
+          autoUpload: true
+        }
       };
       return createSuccessResponse(defaultSettings);
     }
@@ -72,7 +77,13 @@ export async function PUT(request: NextRequest): Promise<NextResponse<ApiRespons
       backupFrequency: result.data.backupFrequency,
       theme: result.data.theme,
       colorTheme: result.data.colorTheme,
-      lastBackup: undefined // This will be set by the backup process
+      lastBackup: undefined, // This will be set by the backup process
+      googleDrive: {
+        enabled: result.data.googleDriveEnabled,
+        folderId: result.data.googleDriveFolderId || undefined,
+        folderName: result.data.googleDriveFolderName,
+        autoUpload: result.data.googleDriveAutoUpload
+      }
     };
 
     const updatedSettings = await sheetsService.updateAppSettings(settingsData);

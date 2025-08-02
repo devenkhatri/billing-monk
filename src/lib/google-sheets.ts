@@ -1,7 +1,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
-import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData, Project, CreateProjectData, UpdateProjectData, Task, CreateTaskData, UpdateTaskData, TimeEntry, CreateTimeEntryData, UpdateTimeEntryData, ProjectStatus, TaskStatus, TaskPriority, ActivityLog, CreateActivityLogData, ActivityLogFilters } from '@/types';
+import { Client, CreateClientData, Invoice, CreateInvoiceData, UpdateInvoiceData, LineItem, InvoiceStatus, Payment, CreatePaymentData, CompanySettings, PaymentMethod, Template, CreateTemplateData, UpdateTemplateData, Project, CreateProjectData, UpdateProjectData, Task, CreateTaskData, UpdateTaskData, TimeEntry, CreateTimeEntryData, UpdateTimeEntryData, ProjectStatus, TaskStatus, TaskPriority, ActivityLog, CreateActivityLogData, ActivityLogFilters, InvoiceStorageStatus, AppSettings, GoogleDriveConfig } from '@/types';
 import { generateId } from './utils';
 
 // Error types for better error handling
@@ -2406,6 +2406,10 @@ export class GoogleSheetsService {
         {
           name: 'ActivityLogs',
           headers: ['ID', 'Type', 'Description', 'EntityType', 'EntityID', 'EntityName', 'UserID', 'UserEmail', 'IPAddress', 'UserAgent', 'Amount', 'PreviousValue', 'NewValue', 'Metadata', 'Timestamp']
+        },
+        {
+          name: 'InvoiceStorage',
+          headers: ['InvoiceID', 'DriveFileID', 'Status', 'UploadedAt', 'LastAttempt', 'RetryCount', 'ErrorMessage', 'CreatedAt', 'UpdatedAt']
         }
       ];
 
@@ -2586,7 +2590,13 @@ export class GoogleSheetsService {
         autoBackup: settingsMap.get('auto_backup') === 'true',
         backupFrequency: (settingsMap.get('backup_frequency') as 'daily' | 'weekly' | 'monthly') || 'weekly',
         theme: (settingsMap.get('theme') as 'light' | 'dark' | 'system') || 'light',
-        colorTheme: (settingsMap.get('color_theme') as 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle') || 'default'
+        colorTheme: (settingsMap.get('color_theme') as 'default' | 'lavender' | 'mint' | 'peach' | 'sky' | 'rose' | 'sage' | 'coral' | 'periwinkle') || 'default',
+        googleDrive: {
+          enabled: settingsMap.get('google_drive_enabled') === 'true',
+          folderId: settingsMap.get('google_drive_folder_id') || undefined,
+          folderName: settingsMap.get('google_drive_folder_name') || 'Invoices',
+          autoUpload: settingsMap.get('google_drive_auto_upload') !== 'false', // Default to true
+        }
       };
     } catch (error) {
       console.error('Error getting app settings:', error);
@@ -2606,7 +2616,11 @@ export class GoogleSheetsService {
         ['auto_backup', settings.autoBackup.toString()],
         ['backup_frequency', settings.backupFrequency],
         ['theme', settings.theme],
-        ['color_theme', settings.colorTheme]
+        ['color_theme', settings.colorTheme],
+        ['google_drive_enabled', settings.googleDrive.enabled.toString()],
+        ['google_drive_folder_id', settings.googleDrive.folderId || ''],
+        ['google_drive_folder_name', settings.googleDrive.folderName],
+        ['google_drive_auto_upload', settings.googleDrive.autoUpload.toString()]
       ];
 
       await this.sheets.spreadsheets.values.clear({
@@ -2636,7 +2650,12 @@ export class GoogleSheetsService {
       autoBackup: true,
       backupFrequency: 'weekly',
       theme: 'light',
-      colorTheme: 'default'
+      colorTheme: 'default',
+      googleDrive: {
+        enabled: false,
+        folderName: 'Invoices',
+        autoUpload: true
+      }
     };
   }
 
@@ -2909,5 +2928,337 @@ export class GoogleSheetsService {
       log.metadata ? JSON.stringify(log.metadata) : '',
       log.timestamp.toISOString()
     ];
+  }
+
+  // Invoice Storage Status methods
+  async getInvoiceStorageStatus(invoiceId: string): Promise<InvoiceStorageStatus | null> {
+    return this.executeWithRetry(async () => {
+      await this.ensureInitialized();
+      
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'InvoiceStorage!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const row = rows.find(row => row && row[0] === invoiceId);
+      
+      if (!row) {
+        return null;
+      }
+
+      return this.rowToInvoiceStorageStatus(row);
+    }, 'getInvoiceStorageStatus');
+  }
+
+  async getAllInvoiceStorageStatuses(): Promise<InvoiceStorageStatus[]> {
+    const cacheKey = 'invoice_storage_all';
+    const cached = this.getCachedData<InvoiceStorageStatus[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    return this.executeWithRetry(async () => {
+      await this.ensureInitialized();
+      
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'InvoiceStorage!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const statuses = rows.map(row => this.rowToInvoiceStorageStatus(row));
+      
+      // Cache the results
+      this.setCachedData(cacheKey, statuses, this.DEFAULT_CACHE_TTL);
+      
+      return statuses;
+    }, 'getAllInvoiceStorageStatuses');
+  }
+
+  async createInvoiceStorageStatus(status: Omit<InvoiceStorageStatus, 'retryCount'>): Promise<InvoiceStorageStatus> {
+    return this.executeWithRetry(async () => {
+      const fullStatus: InvoiceStorageStatus = {
+        ...status,
+        retryCount: 0
+      };
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: 'InvoiceStorage!A:I',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.invoiceStorageStatusToRow(fullStatus)]
+        }
+      });
+
+      // Invalidate cache
+      this.clearCache('invoice_storage');
+
+      return fullStatus;
+    }, 'createInvoiceStorageStatus');
+  }
+
+  async updateInvoiceStorageStatus(invoiceId: string, updates: Partial<InvoiceStorageStatus>): Promise<InvoiceStorageStatus | null> {
+    return this.executeWithRetry(async () => {
+      // Get all storage statuses to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'InvoiceStorage!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === invoiceId);
+
+      if (rowIndex === -1) {
+        throw new ValidationError(`Invoice storage status with ID ${invoiceId} not found`);
+      }
+
+      // Get the existing status data
+      const existingRow = rows[rowIndex];
+      if (!existingRow) {
+        throw new ValidationError(`Invoice storage status data is corrupted for ID ${invoiceId}`);
+      }
+      const existingStatus = this.rowToInvoiceStorageStatus(existingRow);
+      
+      // Merge updates with existing data
+      const updatedStatus: InvoiceStorageStatus = {
+        ...existingStatus,
+        ...updates,
+        invoiceId, // Ensure ID doesn't change
+      };
+
+      // Update the row in Google Sheets (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `InvoiceStorage!A${sheetRowIndex}:I${sheetRowIndex}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [this.invoiceStorageStatusToRow(updatedStatus)]
+        }
+      });
+
+      // Invalidate cache
+      this.clearCache('invoice_storage');
+
+      return updatedStatus;
+    }, 'updateInvoiceStorageStatus');
+  }
+
+  async deleteInvoiceStorageStatus(invoiceId: string): Promise<boolean> {
+    return this.executeWithRetry(async () => {
+      // Get all storage statuses to find the row index
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: 'InvoiceStorage!A2:I'
+      });
+
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row && row[0] === invoiceId);
+
+      if (rowIndex === -1) {
+        return false; // Status not found
+      }
+
+      // Delete the row (row index + 2 because we start from A2)
+      const sheetRowIndex = rowIndex + 2;
+      
+      // Get the sheet ID for InvoiceStorage sheet
+      const spreadsheetInfo = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      });
+      
+      const invoiceStorageSheet = spreadsheetInfo.data.sheets?.find(
+        sheet => sheet.properties?.title === 'InvoiceStorage'
+      );
+      
+      if (!invoiceStorageSheet?.properties?.sheetId) {
+        throw new ValidationError('InvoiceStorage sheet not found');
+      }
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: invoiceStorageSheet.properties.sheetId,
+                dimension: 'ROWS',
+                startIndex: sheetRowIndex - 1, // 0-based index
+                endIndex: sheetRowIndex
+              }
+            }
+          }]
+        }
+      });
+
+      // Invalidate cache
+      this.clearCache('invoice_storage');
+
+      return true;
+    }, 'deleteInvoiceStorageStatus');
+  }
+
+  async getInvoiceStorageStatusesByStatus(status: InvoiceStorageStatus['status']): Promise<InvoiceStorageStatus[]> {
+    return this.executeWithRetry(async () => {
+      const allStatuses = await this.getAllInvoiceStorageStatuses();
+      return allStatuses.filter(s => s.status === status);
+    }, 'getInvoiceStorageStatusesByStatus');
+  }
+
+  async incrementRetryCount(invoiceId: string): Promise<InvoiceStorageStatus | null> {
+    return this.executeWithRetry(async () => {
+      const currentStatus = await this.getInvoiceStorageStatus(invoiceId);
+      if (!currentStatus) {
+        return null;
+      }
+
+      return await this.updateInvoiceStorageStatus(invoiceId, {
+        retryCount: currentStatus.retryCount + 1,
+        lastAttempt: new Date()
+      });
+    }, 'incrementRetryCount');
+  }
+
+  private rowToInvoiceStorageStatus(row: string[]): InvoiceStorageStatus {
+    return {
+      invoiceId: row[0] || '',
+      driveFileId: row[1] && row[1].trim() !== '' ? row[1] : undefined,
+      status: (row[2] as InvoiceStorageStatus['status']) || 'pending',
+      uploadedAt: row[3] && row[3].trim() !== '' ? this.parseDate(row[3]) : undefined,
+      lastAttempt: row[4] && row[4].trim() !== '' ? this.parseDate(row[4]) : undefined,
+      retryCount: parseInt(row[5] || '0'),
+      errorMessage: row[6] && row[6].trim() !== '' ? row[6] : undefined
+    };
+  }
+
+  private invoiceStorageStatusToRow(status: InvoiceStorageStatus): string[] {
+    const now = new Date().toISOString();
+    return [
+      status.invoiceId,
+      status.driveFileId || '',
+      status.status,
+      status.uploadedAt ? status.uploadedAt.toISOString() : '',
+      status.lastAttempt ? status.lastAttempt.toISOString() : '',
+      status.retryCount.toString(),
+      status.errorMessage || '',
+      now, // CreatedAt
+      now  // UpdatedAt
+    ];
+  }
+
+  // Google Drive Configuration methods
+  async getGoogleDriveConfig(): Promise<GoogleDriveConfig> {
+    try {
+      const appSettings = await this.getAppSettings();
+      if (!appSettings) {
+        return {
+          enabled: false,
+          folderName: 'Invoices'
+        };
+      }
+
+      return {
+        enabled: appSettings.googleDrive.enabled,
+        folderId: appSettings.googleDrive.folderId,
+        folderName: appSettings.googleDrive.folderName
+      };
+    } catch (error) {
+      console.error('Error getting Google Drive config:', error);
+      return {
+        enabled: false,
+        folderName: 'Invoices'
+      };
+    }
+  }
+
+  async updateGoogleDriveConfig(config: Partial<GoogleDriveConfig>): Promise<GoogleDriveConfig> {
+    try {
+      const currentSettings = await this.getAppSettings();
+      if (!currentSettings) {
+        throw new Error('App settings not found');
+      }
+
+      const updatedSettings: AppSettings = {
+        ...currentSettings,
+        googleDrive: {
+          ...currentSettings.googleDrive,
+          enabled: config.enabled !== undefined ? config.enabled : currentSettings.googleDrive.enabled,
+          folderId: config.folderId !== undefined ? config.folderId : currentSettings.googleDrive.folderId,
+          folderName: config.folderName !== undefined ? config.folderName : currentSettings.googleDrive.folderName
+        }
+      };
+
+      await this.updateAppSettings(updatedSettings);
+
+      return {
+        enabled: updatedSettings.googleDrive.enabled,
+        folderId: updatedSettings.googleDrive.folderId,
+        folderName: updatedSettings.googleDrive.folderName
+      };
+    } catch (error) {
+      console.error('Error updating Google Drive config:', error);
+      throw error;
+    }
+  }
+
+  async enableGoogleDriveStorage(folderId?: string, folderName: string = 'Invoices'): Promise<void> {
+    try {
+      await this.updateGoogleDriveConfig({
+        enabled: true,
+        folderId,
+        folderName
+      });
+    } catch (error) {
+      console.error('Error enabling Google Drive storage:', error);
+      throw error;
+    }
+  }
+
+  async disableGoogleDriveStorage(): Promise<void> {
+    try {
+      await this.updateGoogleDriveConfig({
+        enabled: false
+      });
+    } catch (error) {
+      console.error('Error disabling Google Drive storage:', error);
+      throw error;
+    }
+  }
+
+  async setGoogleDriveFolder(folderId: string, folderName: string): Promise<void> {
+    try {
+      await this.updateGoogleDriveConfig({
+        folderId,
+        folderName
+      });
+    } catch (error) {
+      console.error('Error setting Google Drive folder:', error);
+      throw error;
+    }
+  }
+
+  async getDefaultGoogleDriveFolder(): Promise<{ folderId?: string; folderName: string }> {
+    try {
+      const config = await this.getGoogleDriveConfig();
+      
+      // If no folder is configured, return default
+      if (!config.folderId) {
+        return {
+          folderName: 'Invoices'
+        };
+      }
+
+      return {
+        folderId: config.folderId,
+        folderName: config.folderName
+      };
+    } catch (error) {
+      console.error('Error getting default Google Drive folder:', error);
+      return {
+        folderName: 'Invoices'
+      };
+    }
   }
 }
